@@ -1,0 +1,53 @@
+name:                Pixels
+version:             0.1.0.0
+synopsis:            Initial project template from stack
+description:         Please see README.md
+homepage:            https://github.com/SwiftsNamesake/Pixels#readme
+license:             MIT
+license-file:        LICENSE.md
+author:              Jonatan H Sundqvist
+maintainer:          jonatanhsundqvist@gmail.com
+copyright:           (c) Jonatan H Sundqvist, &lt;2016&gt;
+category:            &lt;category&gt;
+build-type:          Simple
+-- extra-source-files:
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Pixels.Render, Pixels.Interaction, Pixels.Types, Pixels.Lenses
+  build-depends:       base >= 4.5 && <= 5,
+                       JuicyPixels == 3.2.*,
+                       repa == 3.4.*,
+                       GLFW-b,
+                       linear,
+                       transformers,
+                       containers,
+                       lens,
+                       OpenGL,
+                       GLUtil,
+                       filepath,
+                       Michelangelo,
+                       Cartesian
+  default-language:    Haskell2010
+
+executable Pixels-exe
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base,
+                       Pixels
+  default-language:    Haskell2010
+
+test-suite Pixels-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base,
+                       Pixels
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/SwiftsNamesake/Pixels
