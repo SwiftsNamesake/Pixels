@@ -19,6 +19,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Pixels.Render, Pixels.Interaction, Pixels.Types, Pixels.Lenses
   build-depends:       base >= 4.5 && <= 5,
+                       reactive-banana,
                        JuicyPixels == 3.2.*,
                        repa == 3.4.*,
                        GLFW-b,

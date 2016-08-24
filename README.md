@@ -44,6 +44,11 @@ TODO
   - [ ] OpenGL profiles, compatibility
   - [ ] Versioned history
   
+  - Distribution
+    -- Packaging
+    -- Icon
+    -- Licenses, rights, pricing, credits
+    -- Multi-platform
 
   - Saving
     -- Autosave
@@ -66,6 +71,7 @@ TODO
 
   - Performance
     -- Profiling
+    -- Disabling unneeded features (?)
     -- Startup times (load the essential first, lazy feature loading?)
     -- Include performance checks in test suite
     -- Multicore, async
