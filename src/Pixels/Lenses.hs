@@ -44,8 +44,9 @@ import Pixels.Types
 -- type Mesh  = (GL.BufferObject, GL.BufferObject, Int)
 -- type World = ()
 
-makeLenses ''AppState 
-makeLenses ''Input 
-makeLenses ''Mouse 
+makeLenses ''AppState
+makeLenses ''Input
+makeLenses ''Mouse
 makeLenses ''Settings
--- makeLenses ''Camera
+makeLenses ''Graphics
+makeLenses ''Camera

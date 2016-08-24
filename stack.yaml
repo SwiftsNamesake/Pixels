@@ -2,10 +2,14 @@ compiler-check: newer-minor
 extra-deps:
 - GLUtil-0.9.1.0
 - hpp-0.3.1.0
-
 resolver: lts-6.10
 flags: {}
+arch: i386, x86_64
+# arch: i386, x86_62
 packages:
 - '.'
 - location: C:/Users/Jonatan/Desktop/Haskell/modules/Cartesian
 - location: C:/Users/Jonatan/Desktop/Haskell/modules/Michelangelo
+
+# - location: C:/Users/Jonatan/Desktop/Haskell/projects/Pixels/libs/awesomium
+# - location: C:/Users/Jonatan/Desktop/Haskell/projects/Pixels/libs/awesomium-raw
