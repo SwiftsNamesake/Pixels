@@ -9,6 +9,9 @@ attribute vec2 aTexCoord;
 uniform mat4 uMVMatrix;
 uniform mat4 uPMatrix;
 
+uniform sampler2D uTex0;
+uniform vec3 uMouseVec;
+
 varying vec4 vColor;
 varying vec2 vTexCoord;
 

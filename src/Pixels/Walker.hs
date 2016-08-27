@@ -1,14 +1,17 @@
+-- |
+-- Module      : Pixels.Walker
+-- Description : Little toy module to experiment with random paths
+-- Copyright   : (c) Jonatan H Sundqvist, 2016
+-- License     : MIT
+-- Maintainer  : Jonatan H Sundqvist
+-- Stability   : experimental|stable
+-- Portability : POSIX (not sure)
+-- 
 
---
--- Pixels.Lenses
--- Lenses...
---
--- Jonatan H Sundqvist
--- August 20 2016
---
+-- Created August 27 2016
 
--- TODO | -
---        -
+-- TODO | - 
+--        - 
 
 -- SPEC | -
 --        -
@@ -16,38 +19,26 @@
 
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
--- GHC directives
-------------------------------------------------------------------------------------------------------------------------------------------------------
-{-# LANGUAGE TemplateHaskell #-}
-
-
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
 -- API
 ------------------------------------------------------------------------------------------------------------------------------------------------------
-module Pixels.Lenses where
+module Pixels.Walker where
 
 
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 -- We'll need these
 ------------------------------------------------------------------------------------------------------------------------------------------------------
-import Control.Lens
-
-import Pixels.Types
+import System.Random
+import Linear.V2
+import Linear.V3
 
 
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
--- Lenses
+-- Functions
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
--- type Mesh  = (GL.BufferObject, GL.BufferObject, Int)
--- type World = ()
-
-makeLenses ''AppState
-makeLenses ''Input
-makeLenses ''Mouse
-makeLenses ''Settings
-makeLenses ''Graphics
-makeLenses ''Camera
+-- |
+-- TODO: Relax the type restrictions (?)
+path :: RealFloat f => StdGen -> V2 f -> [V2 f]
+path g = undefined
