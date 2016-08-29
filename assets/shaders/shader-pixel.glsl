@@ -21,13 +21,17 @@ void attenuate(in float dist, in float a, in float b, out float intensity) {
 }
 
 
+// void cone() {
+	// Directional lighting
+// }
+
 
 void main(void) {
 
 	float total=0.0, intensity, a=2.0, b=0.02;
 
 	// float d = distance(gl_FragCoord.xy, uMouseVec.xy);
-	// const float π  = 3.1415926535897932384626433832795;
+	// const float π  = 3.1415926535897932384626433832795; // Unicode allowed in comments?
 	const float pi = 3.1415926535897932384626433832795;
 
 	float omega = 1.2;

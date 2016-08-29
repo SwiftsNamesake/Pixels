@@ -46,6 +46,7 @@ import Pixels.Types
 -- type World = ()
 
 makeLenses ''AppState
+makeLenses ''Paths
 makeLenses ''Input
 makeLenses ''Mouse
 makeLenses ''Settings

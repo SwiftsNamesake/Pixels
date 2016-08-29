@@ -16,6 +16,13 @@
 
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
+-- GHC Pragmas
+------------------------------------------------------------------------------------------------------------------------------------------------------
+-- {-# LANGUAGE OverloadedRecordFields #-} -- Some day...
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
 -- API
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 module Pixels.Types where
@@ -26,7 +33,7 @@ module Pixels.Types where
 -- We'll need these
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 import qualified Data.Set as S
-import qualified Data.Map as M
+import qualified Data.Map as M -- TODO: Use strict version (?)
 
 import Linear.V2
 
@@ -51,22 +58,32 @@ import           Cartesian.Plane.Types
 
 -- |
 -- type Mesh  = (GL.PrimitiveMode, GL.BufferObject, GL.BufferObject, Int, Maybe [GL.TextureObject])
-data Mesh = Mesh { _primitive :: GL.PrimitiveMode,
+data Mesh = Mesh { _primitive        :: GL.PrimitiveMode,
 	                 _attributeBuffers :: M.Map String (GL.BufferObject, Int),
-                   _numVertices :: Int,
-                   _textures :: [GL.TextureObject] } 
+                   _numVertices      :: Int,
+                   _textures         :: [GL.TextureObject] }
 
-type World = [V2 Double]
+type Meshes = M.Map String Mesh
+type World  = [V2 Double]
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- |
 data AppState = AppState { _input    :: Input Float,
+	                         _paths    :: Paths,
 	                         _world    :: World,
                            _settings :: Settings,
                            _ui       :: UI,
                            _size     :: V2 Float,
                            _graphics :: Graphics }
+
+
+-- |
+    -- let home = "C:/Users/Jonatan/Desktop/Haskell/projects/Pixels"
+    -- let shaderpath = home </> "assets/shaders"
+data Paths = Paths { _home         :: FilePath,
+                     _assets       :: FilePath }
+                     _pathTextures :: FilePath }
 
 
 -- |
@@ -78,7 +95,7 @@ data Mouse f = Mouse { _position :: V2 f, _buttons :: S.Set GLFW.MouseButton }
 
 
 -- |
-data Graphics = Graphics { _program :: GL.Program, _camera :: Camera Float } --, _viewport }
+data Graphics = Graphics { _program :: GL.Program, _camera :: Camera Float, _meshes :: Meshes } --, _viewport }
 
 -- |
 data UI = UI {}

@@ -83,3 +83,8 @@ putChar  = flushed . P.putChar
 
 -- Math ----------------------------------------------------------------------------------------------------------------------------------------------
 
+
+-- Map operations ------------------------------------------------------------------------------------------------------------------------------------
+
+-- | Perform some action with the indexed item if it is found, otherwise use the default value
+-- TODO: Find out if the Lens or Containers packages provide a similar function

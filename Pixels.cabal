@@ -26,6 +26,8 @@ library
                        linear,
                        transformers,
                        utf8-string,
+                       directory,
+                       -- QuadTree,
                        containers,
                        lens,
                        aeson,
