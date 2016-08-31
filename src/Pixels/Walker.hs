@@ -40,5 +40,7 @@ import Linear.V3
 
 -- |
 -- TODO: Relax the type restrictions (?)
-path :: RealFloat f => StdGen -> V2 f -> [V2 f]
-path g = undefined
+path :: (Random f, RealFloat f) => StdGen -> V2 f -> [V2 f]
+path g _ = let (x, g')  = random g
+               (y, g'') = random g'
+           in V2 x y : path g'' (V2 x y)

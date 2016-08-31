@@ -7,6 +7,8 @@ extra-deps:
 - FTGL-2.1
 - stb-truetype-0.1.2
 # - QuadTree-0.11.0
+- friday-0.2.2.0
+- ratio-int-0.1.2
 
 resolver: lts-6.10
 flags: {}

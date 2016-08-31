@@ -19,5 +19,4 @@ void main(void) {
 	gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 	vColor    = aVertexColor;
 	vTexCoord = vec2(aTexCoord.s, 1-aTexCoord.t);
-	// vColor = vec4(1.0, 0.02, 0.02, 1.0);
 }

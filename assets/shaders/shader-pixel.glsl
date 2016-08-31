@@ -1,7 +1,6 @@
 #version 440
 
 precision mediump float;
-//
 
 in highp vec2 vTexCoord;
 in vec4 gl_FragCoord; // Not sure if this is needed
@@ -22,7 +21,7 @@ void attenuate(in float dist, in float a, in float b, out float intensity) {
 
 
 // void cone() {
-	// Directional lighting
+  // Directional lighting
 // }
 
 
@@ -37,7 +36,7 @@ void main(void) {
 	float omega = 1.2;
 	float theta = 2*pi*uTime*omega;
 
-	vec4 lights[4] = vec4[4](vec4(100, 100, 30.0, 0.1),
+	vec4 lights[4] = vec4[4](vec4(100, 100, 30.0, 0.10),
 		                       vec4(360, 120,  2.2, 0.05),
 		                       vec4(700, 200,  4.5, 0.01),
 		                       vec4(uMouseVec.xy, 2.0 + 8*0.5*(1+sin(theta)), 0.02));
@@ -46,6 +45,7 @@ void main(void) {
 	  attenuate(distance(gl_FragCoord.xy, lights[i].xy), lights[i].z, lights[i].w, intensity);
 	  total += intensity;
   }
-
-	gl_FragColor = clamp(total, 0.0, 1.0) * vColor * texture(uTex0, vTexCoord);
+  
+  gl_FragColor = clamp(total, 0.0, 1.0) * vColor * texture(uTex0, vTexCoord);
+  
 }

@@ -45,8 +45,11 @@ import Pixels.Types
 -- type Mesh  = (GL.BufferObject, GL.BufferObject, Int)
 -- type World = ()
 
+-- TODO: Prevent clashes (use a more sophisticated lens generator)
 makeLenses ''AppState
 makeLenses ''Paths
+makeLenses ''Mesh
+makeLenses ''Debug
 makeLenses ''Input
 makeLenses ''Mouse
 makeLenses ''Settings
