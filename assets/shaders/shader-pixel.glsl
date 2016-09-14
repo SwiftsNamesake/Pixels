@@ -14,6 +14,7 @@ uniform sampler2D uTex0;
 
 varying vec4 vColor;
 
+const float ALPHA_MIN = 0.9; // TODO: Turn into uniform
 
 void attenuate(in float dist, in float a, in float b, out float intensity) {
 	intensity = a / (a + b*dist + b*b*dist*dist);
@@ -21,11 +22,13 @@ void attenuate(in float dist, in float a, in float b, out float intensity) {
 
 
 // void cone() {
-  // Directional lighting
+	// Directional lighting
 // }
 
 
 void main(void) {
+
+  if (vColor.a < ALPHA_MIN) { discard; }
 
 	float total=0.0, intensity, a=2.0, b=0.02;
 
@@ -39,13 +42,16 @@ void main(void) {
 	vec4 lights[4] = vec4[4](vec4(100, 100, 30.0, 0.10),
 		                       vec4(360, 120,  2.2, 0.05),
 		                       vec4(700, 200,  4.5, 0.01),
-		                       vec4(uMouseVec.xy, 2.0 + 8*0.5*(1+sin(theta)), 0.02));
+		                       vec4(uMouseVec.xy, 2.0 + 8*0.5, 0.02));
+                           // vec4(uMouseVec.xy, 2.0 + 8*0.5*(1+sin(theta)), 0.02));
 
   for (int i=0; i < lights.length(); ++i) {
 	  attenuate(distance(gl_FragCoord.xy, lights[i].xy), lights[i].z, lights[i].w, intensity);
 	  total += intensity;
   }
+
+  total = clamp(total, 0.0, 1.0);
   
-  gl_FragColor = clamp(total, 0.0, 1.0) * vColor * texture(uTex0, vTexCoord);
+  gl_FragColor = vec4(total, total, total, 1.0) * vColor * texture(uTex0, vTexCoord);
   
 }

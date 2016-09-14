@@ -71,7 +71,7 @@ def subdivide(fn, cols, rows):
 
 
 def main():
-  toHexArray('pencil.png', 'pencil.txt')
+  toHexArray('pencil.png', 'pencil.downtxt')
   # subdivide('C:/Users/Jonatan/Pictures/run_frames.png', 4, 4)
   stencils('C:/Users/Jonatan/Pictures/run_frames.png',
   	       'C:/Users/Jonatan/Desktop/Haskell/projects/Pixels/assets/2016-08-28_06-15-54.5479569_UTC.json')

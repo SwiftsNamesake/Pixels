@@ -46,6 +46,7 @@ import Pixels.Types
 -- type World = ()
 
 -- TODO: Prevent clashes (use a more sophisticated lens generator)
+-- runQ . sequence $ map makeLenses [''AppState, ''Paths , ''Mesh , ''Debug , ''Input , ''Mouse , ''Settings , ''Graphics , ''Camera]
 makeLenses ''AppState
 makeLenses ''Paths
 makeLenses ''Mesh
@@ -55,3 +56,4 @@ makeLenses ''Mouse
 makeLenses ''Settings
 makeLenses ''Graphics
 makeLenses ''Camera
+makeLenses ''CPUResources

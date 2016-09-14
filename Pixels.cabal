@@ -17,35 +17,54 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Pixels.Render, Pixels.Interaction, Pixels.Types, Pixels.Lenses, Pixels.Walker, Pixels.Trinkets
-  build-depends:       base >= 4.5 && <= 5,
-                       reactive-banana,
-                       JuicyPixels == 3.2.*,
-                       repa == 3.4.*,
-                       GLFW-b,
-                       linear,
-                       transformers,
-                       utf8-string,
-                       directory,
-                       errors,
-                       friday,
-                       async,
-                       monad-loops,
-                       -- QuadTree,
-                       containers,
-                       lens,
-                       aeson,
-                       fsnotify,
-                       wreq,
-                       OpenGL,
-                       random,
-                       GLUtil,
-                       filepath,
-                       either,
-                       -- monad-transformers,
-                       -- glob,
-                       Michelangelo,
-                       Cartesian
+  exposed-modules:     Pixels.Render,
+                       Pixels.Interaction,
+                       Pixels.Types,
+                       Pixels.Lenses,
+                       Pixels.Walker,
+                       Pixels.Trinkets,
+                       Pixels.Load,
+                       Pixels.Plugins,
+
+                       Pixels.Console
+
+  build-depends:         base            >= 4.5 && <= 5
+                       , reactive-banana
+                       , JuicyPixels     == 3.2.*
+                       , ghc
+                       , ghc-paths
+                       , repa            == 3.4.*
+                       , repa-io         >= 3.4 && < 3.5
+                       , FontyFruity
+                       , vector
+                       , text
+                       , GLFW-b
+                       , linear
+                       , attoparsec
+                       , transformers
+                       , utf8-string
+                       , directory
+                       , friday
+                       , async
+                       , monad-loops
+                       , storable-tuple
+                       -- QuadTree
+                       , containers
+                       , lens
+                       , aeson
+                       , fsnotify
+                       , wreq
+                       , OpenGL
+                       , random
+                       , GLUtil
+                       , filepath
+                       , either
+                       , ansi-terminal
+                       -- monad-transformers
+                       -- glob
+                       , Michelangelo
+                       , Cartesian
+                       , Leibniz
 
   -- extra-include-dirs:  "C:/Program Files (x86)/Khrona LLC/Awesomium SDK/1.6.5/include"
   -- extra-lib-dirs:      "C:/Program Files (x86)/Khrona LLC/Awesomium SDK/1.6.5/build/lib/release"
@@ -58,10 +77,20 @@ library
   default-language:    Haskell2010
 
 
-executable Pixels-exe
+executable Pixels
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+                       -fwarn-tabs
+                       -fwarn-unused-imports
+                       -fwarn-name-shadowing
+                       -fwarn-incomplete-uni-patterns
+                       -fwarn-incomplete-patterns
+                       -fwarn-overlapping-patterns
+                       -fwarn-incomplete-record-updates
+                       -fwarn-missing-signatures
+                       -fwarn-monomorphism-restriction
+                       -fwarn-orphans
   build-depends:       base,
                        Pixels
   default-language:    Haskell2010

@@ -16,13 +16,7 @@
 
 module Main where
 
-import qualified Pixels.Render as Render
-import qualified Pixels.Walker as Walker
+import qualified Pixels.Interaction as Interaction
 
 main :: IO ()
-main = do
-  --
-  putStrLn "Testing random walks"
-
-  --
-  Render.main
+main = Interaction.main

@@ -21,14 +21,22 @@
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 -- GHC directives
 ------------------------------------------------------------------------------------------------------------------------------------------------------
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE NoImplicitPrelude    #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE TupleSections        #-}
 
 
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 -- API
 ------------------------------------------------------------------------------------------------------------------------------------------------------
-module Pixels.Trinkets where
+module Pixels.Trinkets (flushed,
+                        pass, execute, sequencePairs,
+                        hasExtension,
+                        putStr, putStrLn, putChar, print,
+                        flatten, asList,
+                        logStr, indentedStrLn) where
 
 
 
@@ -38,16 +46,24 @@ module Pixels.Trinkets where
 import           Prelude hiding (putStrLn, print, putStr, putChar)
 import qualified Prelude as P
 
-import Control.Monad (when)
-import Control.Lens
+import Data.Foldable as F
 
+import Text.Printf
+
+import Control.Monad.Trans.Either
+import Control.Monad (when, void)
+import Control.Lens
+import Control.Applicative (liftA2)
+
+import System.FilePath  ((</>), takeExtension, dropExtension, takeFileName) --
 import System.Random
 import System.IO (stdout, hFlush) --
+import System.Console.ANSI
 
 import Linear.V2
 import Linear.V3
 
-import Cartesian.Types (Vector(..))
+-- import Cartesian.Space.Types (Vector(..))
 
 import Pixels.Types
 import Pixels.Lenses
@@ -63,6 +79,25 @@ import Pixels.Lenses
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 -- Functions
 ------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- Experiments ---------------------------------------------------------------------------------------------------------------------------------------
+
+-- How do you manipulate, componse, varargs functions...
+
+-- class VarArg a where
+--   apply :: VarArg c => (a -> b) -> [b] -> a -> c
+
+
+-- instance VarArg String where
+--   apply f bs a = f a : bs
+
+
+-- instance VarArg b => VarArg (a -> b) where
+--   apply f bs a = apply f (f a : bs)
+
+
+-- reduce :: (VarArg a, VarArg c) => (a -> b) -> [b] -> c
+-- reduce f bs a = apply f bs a
 
 -- IO helpers ----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -89,33 +124,96 @@ putStr   = flushed . P.putStr
 putChar :: Char -> IO ()
 putChar  = flushed . P.putChar
 
+-- Paths ---------------------------------------------------------------------------------------------------------------------------------------------
+
+-- | Does the filepath have the given extension?
+hasExtension :: String -> FilePath -> Bool
+hasExtension ext fn = takeExtension fn == ext -- This should really be defined in the filepaths package....
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
 -- Logging -------------------------------------------------------------------------------------------------------------------------------------------
+
+-- | TODO: LoggerT
+
+
+-- |
+indent :: Int -> String -> String
+indent i s = (++ s) . flip replicate ' ' . (*2) $ i
+
 
 -- |
 indentedStrLn :: Int -> String -> IO ()
-indentedStrLn level s = putStrLn $ replicate (level*2) ' ' ++ s
+indentedStrLn level s = putStrLn $ indent level s
 
 
 -- |
--- TODO: Rendering log messages
-logStr :: Debug -> LogLevel -> Int -> String -> IO ()
-logStr db level indent s = when (level >= db^.logLevel) (indentedStrLn indent s)
+putWithSGR :: [Either [SGR] String] -> IO ()
+putWithSGR = void . mapM (either setSGR putStr)
 
-------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+shouldLog :: Debug -> LogLevel -> Bool
+shouldLog db logLvl = (logLvl) >= (db^.logLevel)
+
+
+-- |
+-- TODO: Colouring breaks when using the Git-bash console
+-- TODO: Rendering log messages
+-- TODO: Indent multiple lines (?)
+-- TODO: Break up filtering (when) and formatting (putWithSGR)
+logStr :: Debug -> LogLevel -> Int -> String -> IO ()
+logStr db logLvl indentLvl s = when (shouldLog db logLvl) $ putWithSGR [Right $ indent indentLvl "[",
+                                                                        Left  $ [SetColor Foreground Vivid fg],
+                                                                        Right $ label,
+                                                                        Left  $ [SetColor Foreground Vivid White],
+                                                                        Right $ "] " ++ message ++ "\n"]
+  where
+    message = let (l:ines) = lines s in unlines $ l : map (indent indentLvl) ines -- The first line has already been indented
+    (fg, label) = case logLvl of
+      InfoLevel     -> (Green,  "Info")
+      WarningLevel  -> (Yellow, "Warning")
+      CriticalLevel -> (Red,    "Critical")
+
+--- Control ------------------------------------------------------------------------------------------------------------------------------------------
 
 -- |
 pass :: Monad m => m ()
 pass = return ()
 
+
+-- |
+execute :: Monad m => EitherT a m b -> m ()
+execute = void . runEitherT
+
+
+-- | Like sequence, but for tuples where the first item is pure
+-- TODO: Rename (?)
+sequencePairs :: Monad m => [(a, m b)] -> m [(a,b)]
+sequencePairs ps = let invert (a, b) = b >>= return . (a,) in sequence . map invert $ ps
+    
+
+-- Coordinate systems --------------------------------------------------------------------------------------------------------------------------------
+
+-- |    
+snapToNearest :: (Num (v f), RealFrac f, Applicative v) => v f -> v f -> v f -> v f
+snapToNearest resolution point origin = liftA2 snap' resolution (point - origin) + origin
+  where
+    snap' res v = res * (fromIntegral . round $ v/res) -- Snaps in one dimensions
+
 -- Math ----------------------------------------------------------------------------------------------------------------------------------------------
 
 -- Vectors -------------------------------------------------------------------------------------------------------------------------------------------
 
-flatten :: (Vector v, Num f) => [v f] -> [f]
+flatten :: Foldable v => [v f] -> [f]
 flatten = concatMap asList
 
-asList :: (Vector v, Num f) => v f -> [f]
-asList = reverse . vfold (flip (:)) []
+
+-- foldl :: (b -> a -> b) -> b -> t a -> b
+asList :: Foldable v => v f -> [f]
+asList = F.foldr (:) []
 
 -- Map operations ------------------------------------------------------------------------------------------------------------------------------------
 

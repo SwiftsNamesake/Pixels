@@ -30,6 +30,9 @@ TODO
     -- Configurable UI
     -- Internationalisation, unicode, keyboard layouts
     -- Drag and drop (images, text[,voice][,user-defined], shaders, colours)
+  
+  - [ ] Interesting libraries
+        -- (Diagrams)[http://projects.haskell.org/diagrams/]
 
   - [ ] How to deal with external DLLs
   - [ ] Is Awesomium 32-bit only?
