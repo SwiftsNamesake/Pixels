@@ -18,7 +18,10 @@
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 -- GHC directives
 ------------------------------------------------------------------------------------------------------------------------------------------------------
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell        #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE FlexibleInstances      #-}
 
 
 
@@ -47,13 +50,13 @@ import Pixels.Types
 
 -- TODO: Prevent clashes (use a more sophisticated lens generator)
 -- runQ . sequence $ map makeLenses [''AppState, ''Paths , ''Mesh , ''Debug , ''Input , ''Mouse , ''Settings , ''Graphics , ''Camera]
-makeLenses ''AppState
-makeLenses ''Paths
-makeLenses ''Mesh
-makeLenses ''Debug
-makeLenses ''Input
-makeLenses ''Mouse
-makeLenses ''Settings
-makeLenses ''Graphics
-makeLenses ''Camera
-makeLenses ''CPUResources
+makeLensesWith abbreviatedFields ''AppState
+makeLensesWith abbreviatedFields ''Paths
+makeLensesWith abbreviatedFields ''Mesh
+makeLensesWith abbreviatedFields ''Debug
+makeLensesWith abbreviatedFields ''Input
+makeLensesWith abbreviatedFields ''Mouse
+makeLensesWith abbreviatedFields ''Settings
+makeLensesWith abbreviatedFields ''Graphics
+makeLensesWith abbreviatedFields ''Camera
+makeLensesWith abbreviatedFields ''CPUResources

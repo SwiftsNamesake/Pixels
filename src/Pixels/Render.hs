@@ -40,51 +40,23 @@ module Pixels.Render where
 -- We'll need these
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 import           Prelude hiding (putStrLn, putStr, print, putChar)
-import qualified Prelude as P
+-- import qualified Prelude as P
 
-import Debug.Trace
 import Text.Printf
 
-import System.FilePath  ((</>), takeExtension, dropExtension, takeFileName) --
-import System.Directory (getDirectoryContents)
--- import System.FilePath.Glob (match, compile)
--- import System.Console.ANSI        --
+-- import Linear.Projection
+-- import Linear.Quaternion
+import Linear (M44, (!*!), translation, identity, perspective, ortho, V2(..), V3(..))
 
-import Linear.Projection
-import Linear.Quaternion
-import Linear.Matrix hiding (transpose, trace)
-import Linear.V2
-import Linear.V3
-import Linear.V4
-
-import           Data.Function (on)
-import           Data.Bits
+-- import           Data.Bits
 import           Data.Word
-import           Data.Maybe (fromMaybe, listToMaybe)
-import           Data.IORef
-import qualified Data.Set         as S
+import           Data.Maybe (fromMaybe)
 import qualified Data.Map         as M
-import qualified Data.Traversable as T
-import           Data.Aeson
-import           Data.List  (transpose, isInfixOf, sortBy)
-import           Data.Ord   (comparing)
 
-import           Data.Array.Repa ((:.)(..)) -- Weirdest syntax ever
-import qualified Data.Array.Repa as R
-
-import qualified Data.Vector          as V
-import qualified Data.Vector.Storable as VS
-import qualified Data.Vector.Unboxed  as VU
-
-import           Control.Monad.Trans.Class as St
-import qualified Control.Monad.Trans.State as St
 import           Control.Monad.Trans.Either
 import           Control.Lens hiding (argument)
 import           Control.Monad
-import           Control.Monad.Loops (whileM)
-import           Control.Applicative ((<$>), (<*>), liftA2)
-import           Control.Concurrent (threadDelay, forkIO)
-import           Control.Concurrent.MVar
+-- import           Control.Applicative ((<$>), (<*>), liftA2)
 
 import qualified Graphics.UI.GLFW as GLFW
 
@@ -104,10 +76,12 @@ import Foreign.Marshal    as Marshal hiding (void)
 import Foreign.Ptr        as Ptr
 import Foreign.ForeignPtr as FPtr
 
-import           Leibniz.Constants (π)
+import Leibniz.Constants (π)
+import Cartesian.Core (x,y,z)
 
 import           Graphics.Michelangelo.Transformations
-import qualified Graphics.Michelangelo.Shaders as Shaders
+import qualified Graphics.Michelangelo.Shaders as Shader
+import           Graphics.Michelangelo.Texture (setTexture)
 import qualified Graphics.Michelangelo.Shapes  as Shapes
 import           Graphics.Michelangelo.Types (Matrix44(..))
 
@@ -136,7 +110,7 @@ setupOpenGL = do
   -- depthTest $= GL.Enabled
 
   texture2DWrap $= (GL.Repeated, GL.ClampToEdge)
-  textureFilter   Texture2D   $= ((Linear', Nothing), Linear')
+  textureFilter   Texture2D   $= ((Linear', Nothing), Linear') -- TODO: We need to change this if we want pixel-perfect zooming
   textureWrapMode Texture2D S $= (Mirrored, ClampToEdge)
   textureWrapMode Texture2D T $= (Mirrored, ClampToEdge)
 
@@ -155,78 +129,10 @@ attribute (loc, buffer, count) = do
   GL.bindBuffer GL.ArrayBuffer $= Just buffer                                                                        --
   GL.vertexAttribPointer loc   $= (GL.ToFloat, GL.VertexArrayDescriptor (fromIntegral count) GL.Float 0 GL.offset0) --
 
-------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Camera operations ---------------------------------------------------------------------------------------------------------------------------------
 
--- |
--- TODO: Rename (?)
-setTexture :: GL.Program -> GL.TextureObject -> IO ()
-setTexture program texture = do
-  GL.currentProgram $= Just program       -- 
-  GL.activeTexture  $= (GL.TextureUnit 0) -- 
-  GL.textureBinding GL.Texture2D $= Just texture -- Is this needed (?)§
-
-  texture2DWrap $= (Repeated, ClampToEdge)
-  textureFilter   Texture2D   $= ((Linear', Nothing), Linear')
-  textureWrapMode Texture2D S $= (Mirrored, ClampToEdge)
-  textureWrapMode Texture2D T $= (Mirrored, ClampToEdge)
-
-
--- |
--- :: GL.TextureObject -> IO ()
-
--- Creating and manipulating textures ----------------------------------------------------------------------------------------------------------------
-
--- |
--- TODO: Rename (eg. refer to Repa) (?)
--- textureFromImage :: (GL.GLsizei, GL.GLsizei) -> VS.Vector Word8 -> IO GL.TextureObject
-textureFromImage :: Image Word8 -> IO GL.TextureObject
-textureFromImage im = do
-  let [dx, dy] = map fromIntegral (R.listOfShape $ R.extent im)
-  -- when (fromIntegral (dx*dy) /= VS.length v) (printf "dx * dy = %d * %d = %d but the vector only has %d pixels" dx dy (dx*dy) (VS.length v))
-  texId <- GL.genObjectName
-  -- ptr <- VS.unsafeWith im (return . castPtr) -- TODO: Is there a V.safeWith (?)
-  -- ptr <- FPtr.withForeignPtr (R.toForeignPtr v') (return . castPtr)
-  ptr <- repaImagePointer im -- TODO: Not sure how efficient this is....
-  GL.textureBinding GL.Texture2D $= Just texId
-
-  GL.texImage2D
-    (GL.Texture2D)                             -- Target (TODO: Uhm what)
-    (GL.NoProxy)                               -- Proxy (TODO: What's a proxy?)
-    (0)                                        -- Level (TODO: Level of what, mipmap?)
-    (GL.RGBA8)                                 -- Internal pixel format
-    (GL.TextureSize2D dx dy)                   -- Size (in pixels, I believe)
-    (0)                                        -- Border
-    (GL.PixelData GL.RGBA GL.UnsignedByte ptr) -- Pixel data
-  return texId
-
-
--- |
--- TODO: Does this create a new buffer (?)
-repaImagePointer :: Image Word8 -> IO (Ptr a)
-repaImagePointer v = VS.unsafeWith (V.convert $ R.toUnboxed v) (return . castPtr)
-
-
--- |
--- TODO: Rename
-createRepaTexture :: Int -> Int -> (Int -> Int -> Pixel Word8) -> IO GL.TextureObject
-createRepaTexture dx dy f = textureFromImage $ createRepaImage dx dy f
-
-
--- |
-createRepaImage :: Int -> Int -> (Int -> Int -> Pixel Word8) -> Image Word8
-createRepaImage dx dy f = R.fromListUnboxed (R.Z :. dx :. dy) [ f x y | y <- [0..dx-1], x <- [0..dx-1] ]
-
-
--- |
--- TODO: Handle errors (?)
--- TODO: Use repa dimensions for size and origin (?)
--- TODO: Decide size based on repa image (?)
-modifyTexture :: (GLint, GLint) -> (GLsizei, GLsizei) -> Image Word8 -> GL.TextureObject -> IO () -- ()
-modifyTexture topleft size im tex = do
-  ptr <- repaImagePointer im
-  texSubImage2D GL.Texture2D 0 (uncurry TexturePosition2D topleft) (uncurry TextureSize2D size) (GL.PixelData GL.RGBA GL.UnsignedByte ptr)
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
+-- | TODO: Rename
+-- positionCamera :: Camera -> IO ()
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -257,15 +163,15 @@ draw db mouse program pm mv mesh = do
   forM [("uMVMatrix", wrap $ Matrix44 mv),
         ("uPMatrix",  wrap $ Matrix44 pm),
         ("uMouseVec", wrap $ mouse),
-        ("uTex0",     wrap $ (0 :: GLint)),
+        -- ("uTex0",     wrap $ (0 :: GLint)),
         ("uTime",     wrap $ (t :: GLfloat))] $ \(u, v) -> do
     logStr db InfoLevel 2 $ printf "Setting uniform: %s" (show u)
     get (GL.uniformLocation program u) >>= v
   
   -- Set texture
-  when (not . null $ mesh^.oTextures) $ do
+  when (not . null $ mesh^.textures) $ do
     logStr db InfoLevel 2 "Setting texture"
-    setTexture program $ chooseTexture (mesh^.oTextures) t
+    setTexture program $ chooseTexture (mesh^.textures) t
   
   logStr db InfoLevel 2 $ printf "Drawing arrays (%d vertices)" (mesh^.numVertices)
   GL.drawArrays (mesh^.primitive) 0 (fromIntegral $ mesh^.numVertices) --
@@ -338,7 +244,7 @@ render app = do
 
     -- Mouse
     mouse'     = from2D . (!!0) $ app^.input.mouse.path --
-    worldMouse = screenToWorld mouse'               -- Mouse position in world coords
+    worldMouse = screenToWorld mouse'                   -- Mouse position in world coords
 
 
 -- |

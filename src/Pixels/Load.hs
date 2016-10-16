@@ -38,11 +38,11 @@ module Pixels.Load where
 -- We'll need these
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 import           Prelude hiding (putStrLn, putStr, print, putChar)
-import qualified Prelude as P
+-- import qualified Prelude as P
 
 import Text.Printf
 
-import System.FilePath  ((</>), takeExtension, dropExtension, takeFileName) --
+import System.FilePath  ((</>), dropExtension, takeFileName) --
 import System.Directory (getDirectoryContents)
 
 import Linear.V2
@@ -50,7 +50,6 @@ import Linear.V3
 import Linear.V4
 
 import           Data.Bits
-import qualified Data.Set            as S
 import qualified Data.Map            as M
 import qualified Data.Vector.Unboxed as V
 import           Data.Function (on)
@@ -103,10 +102,10 @@ mesh db prim vertices colours texcoords textures' = do
                                         printf "Colour count: %d" (length colours),
                                         printf "Tex    count: %d" (length texcoords)]
   [vs, cs, ts] <- forM [flatten vertices, flatten colours, flatten texcoords] $ GL.makeBuffer GL.ArrayBuffer
-  return $ Mesh { _primitive        = prim,
-                  _attributeBuffers = M.fromList [("aVertexPosition", (vs, 3)), ("aVertexColor", (cs, 4)), ("aTexCoord", (ts, 2))],
-                  _numVertices      = length vertices,
-                  _oTextures        = textures' }
+  return $ Mesh { fPrimitive        = prim,
+                  fAttributeBuffers = M.fromList [("aVertexPosition", (vs, 3)), ("aVertexColor", (cs, 4)), ("aTexCoord", (ts, 2))],
+                  fNumVertices      = length vertices,
+                  fTextures         = textures' }
   where
     allEqual = all (== length vertices) [length colours, length texcoords]
 
@@ -126,11 +125,11 @@ rectangleYZ = rectangle Shapes.planeYZ
 -- |
 rectangle :: MakeVertex Float -> Debug -> V2 Float -> V4 Float -> [GL.TextureObject] -> IO Mesh
 rectangle plane db (V2 dx dy) colour texes = mesh db
-                                                 (GL.Triangles)
-                                                 (tessellate id $ plane V3 dx dy)
-                                                 (replicate 6 colour)
-                                                 (tessellate id $ [V2 0 1, V2 1 1, V2 1 0, V2 0 0])
-                                                 (texes)
+                                               (GL.Triangles)
+                                               (tessellate id $ plane V3 dx dy)
+                                               (replicate 6 colour)
+                                               (tessellate id $ [V2 0 1, V2 1 1, V2 1 0, V2 0 0])
+                                               (texes)
 
 
 tessellate :: ([a] -> [b]) -> [a] -> [b]
@@ -140,7 +139,7 @@ tessellate f as = concatMap f . Shapes.triangles $ as
 
 -- |
 shaders :: Debug -> FilePath -> IO (Either String GL.Program)
-shaders db root = either (Left . unlines) (Right) <$> Shaders.loadShaderProgram (root </> "shader-vertex.glsl") (root </> "shader-pixel.glsl")
+shaders db root = Shaders.loadProgram (root </> "shader-vertex.glsl") (root </> "shader-pixel.glsl")
 
 
 -- |
@@ -249,10 +248,10 @@ fontMesh db font' s tex = mesh db GL.Lines (concat vertices') colours' texcoords
 interface :: Debug -> GL.TextureObject -> IO Mesh
 interface db white = do
   [vs, cs, ts] <- forM [flatten vertices', flatten colors', flatten texcoords'] $ GL.makeBuffer GL.ArrayBuffer
-  return $ Mesh { _primitive        = GL.Triangles,
-                  _attributeBuffers = M.fromList [("aVertexPosition", (vs, 3)), ("aVertexColor", (cs, 4)), ("aTexCoord", (ts, 2))],
-                  _numVertices      = length vertices',
-                  _oTextures        = textures' }
+  return $ Mesh { fPrimitive        = GL.Triangles,
+                  fAttributeBuffers = M.fromList [("aVertexPosition", (vs, 3)), ("aVertexColor", (cs, 4)), ("aTexCoord", (ts, 2))],
+                  fNumVertices      = length vertices',
+                  fTextures         = textures' }
   where
     textures' :: [GL.TextureObject]
     textures' = [white]

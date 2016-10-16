@@ -48,22 +48,16 @@ import qualified Prelude as P
 
 import Data.Foldable as F
 
-import Text.Printf
+-- import Text.Printf
 
 import Control.Monad.Trans.Either
 import Control.Monad (when, void)
 import Control.Lens
 import Control.Applicative (liftA2)
 
-import System.FilePath  ((</>), takeExtension, dropExtension, takeFileName) --
-import System.Random
+import System.FilePath  (takeExtension) --
 import System.IO (stdout, hFlush) --
-import System.Console.ANSI
-
-import Linear.V2
-import Linear.V3
-
--- import Cartesian.Space.Types (Vector(..))
+import System.Console.ANSI (setSGR, SGR(..), Color(..), ConsoleLayer(..), ColorIntensity(Vivid))
 
 import Pixels.Types
 import Pixels.Lenses
@@ -169,7 +163,7 @@ logStr db logLvl indentLvl s = when (shouldLog db logLvl) $ putWithSGR [Right $ 
                                                                         Left  $ [SetColor Foreground Vivid fg],
                                                                         Right $ label,
                                                                         Left  $ [SetColor Foreground Vivid White],
-                                                                        Right $ "] " ++ message ++ "\n"]
+                                                                        Right $ "] " ++ message]
   where
     message = let (l:ines) = lines s in unlines $ l : map (indent indentLvl) ines -- The first line has already been indented
     (fg, label) = case logLvl of

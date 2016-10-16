@@ -30,7 +30,8 @@ TODO
     -- Configurable UI
     -- Internationalisation, unicode, keyboard layouts
     -- Drag and drop (images, text[,voice][,user-defined], shaders, colours)
-  
+    -- Command palette
+    
   - [ ] Interesting libraries
         -- (Diagrams)[http://projects.haskell.org/diagrams/]
 
@@ -56,6 +57,7 @@ TODO
   - Saving
     -- Autosave
     -- Conversions
+    -- Syncing (via Dropbox, iCloud, Google Drive, or my own site)
 
   - Image processing
     -- Machine learning features

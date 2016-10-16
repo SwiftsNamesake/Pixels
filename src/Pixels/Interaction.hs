@@ -62,6 +62,7 @@ import Linear.V2
 import Linear.V3
 import Linear.V4
 import Linear.Matrix
+import Linear.Metric
 import Linear.Projection
 
 import System.FilePath  ((</>), takeExtension, dropExtension, takeFileName) --
@@ -123,17 +124,16 @@ mainloop appref = do
 -- TODO: Limit FPS
 tick :: IORef AppState -> Double -> IO ()
 tick appref t = do
-  putStrLn "Tick"
   app <- readIORef appref
-  let r        = flip mod 32 . floor $ t*0.8*32
-      width    = 5
-      dx       = 32
-      dy       = 32
-      band x y = abs (x^2 + y^2 - r^2) < (width^2)
-      im       = Render.createRepaImage (fromIntegral dx) (fromIntegral dy) (\x y -> if band x y then (0,0,0,255) else (255,255,255,255))
+  let r            = flip mod 32 . floor $ t*0.8*32
+      path'        = app^.input.mouse.path
+      imSize       = V2 32 32
+      band x y     = let width = 5 in abs (x^2 + y^2 - r^2) < (width^2)
+      nearPath p   = any ((< 3) . norm . subtract (toLocalVector p)) path'
+      toLocalVector p = let p' = fromIntegral <$> p in liftA2 (*) (app^.size) $ liftA2 (/) p' (fromIntegral <$> imSize)
+      im       = Render.createRepaImage (fromIntegral <$> imSize) (\p -> if nearPath p then (0,0,0,255) else (255,255,255,255))
       [tex] = app^.graphics.L.meshes.at "mickey"._Just.oTextures
-  Render.modifyTexture (0, 0) (dx, dy) im tex
-  putStrLn "Tock"
+  Render.modifyTexture (V2 0 0) im tex
 
 
 -- |
@@ -210,7 +210,7 @@ onmousemotion :: IORef AppState -> GLFW.Window -> Double -> Double -> IO ()
 onmousemotion appref w mx my = do
   modifyIORef appref . St.execState $ do
     app <- St.get
-    input.mouse.path %= take 10 . (V2 (realToFrac mx) (realToFrac my) :)
+    input.mouse.path %= take 200 . (V2 (realToFrac mx) (realToFrac my) :)
     let (m1:m2:_)  = app^.input.mouse.path 
         (V2 dx dy) = m2 - m1 
         delta      = V3 0 0 dy
@@ -267,7 +267,7 @@ initialiseApp size'@(V2 w h) = runEitherT $ do
   meshes'  <- EitherT (Load.meshes (debug' t) size' paths')
   program' <- EitherT (Load.shaders (debug' t) (assetspath </> "shaders"))
 
-  let repaImage = Render.createRepaImage 32 32 (\x y -> (fromIntegral $ min (x*40) 255, fromIntegral $ min (y*40) 255,255,255))
+  let repaImage = Render.createRepaImage (V2 32 32) (\(V2 x y) -> (fromIntegral $ min (x*40) 255, fromIntegral $ min (y*40) 255,255,255))
   repaTex <- lift $ textureFromImage repaImage
   let meshes'' = meshes' & (at "mickey"._Just.oTextures .~ [repaTex])
   -- settings' <- loadSettings
@@ -284,8 +284,8 @@ initialiseApp size'@(V2 w h) = runEitherT $ do
                        _debug    = debug' t,
                        _window   = window',
                        _input    = Input { _mouse = Mouse { _path=[V2 0 0], _buttons=S.empty }, _keyboard = S.empty, _command=command },
-                       _world    = (),
                        _settings = Settings {},
+                       _session  = Session {},
                        _ui       = UI {},
                        _size     = size',
                        _graphics = Graphics { _program = program',
@@ -311,7 +311,7 @@ initialiseApp size'@(V2 w h) = runEitherT $ do
     -- pm = ortho (-w/2) (w/2) (-h/2) (h/2) (0) (5.0) :: M44 Float
     pm = perspective (60.0 * π/180.0) (w/h) (-1.0) 100.0
 
-    --
+    -- TODO: Don't hard-code the root
     debug' t = Debug { _logLevel = WarningLevel, _startTime = t }
     paths' = Paths { _home = homepath, _assets = assetspath, _textures = texturepath }
     homepath    = "C:/Users/Jonatan/Desktop/Haskell/projects/Pixels"

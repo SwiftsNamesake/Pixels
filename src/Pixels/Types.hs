@@ -7,7 +7,7 @@
 -- August 20 2016
 --
 
--- TODO | -
+-- TODO | - Break up type definitions into separate modules (?)
 --        -
 
 -- SPEC | -
@@ -22,6 +22,7 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE DuplicateRecordFields  #-}
 -- {-# LANGUAGE OverloadedRecordFields #-} -- Some day...
 
 
@@ -39,29 +40,21 @@ module Pixels.Types where
 import qualified Data.Set as S
 import qualified Data.Map as M -- TODO: Use strict version (?)
 import           Data.Word
+import           Data.Colour
 
-import           Data.Array.Repa ((:.)(..)) -- Weirdest syntax ever
-import qualified Data.Array.Repa as R
+-- import qualified Data.Array.Repa as R
 
-import Linear.V2
-import Linear.V3
-import Linear.V4
-import Linear.Matrix (M44)
+import Linear (V2(..), V3(..), M44)
 
 import Control.Lens
 
 import Control.Concurrent.MVar
 
-import qualified Graphics.Rendering.OpenGL                  as GL
-import qualified Graphics.Rendering.OpenGL.GL.BufferObjects as GL
-import qualified Graphics.Rendering.OpenGL.GL.Shaders       as GL --
+import Graphics.Michelangelo.Types (Image)
 
-import qualified Graphics.UI.GLFW                           as GLFW
+import qualified Graphics.Rendering.OpenGL as GL
 
--- import qualified Graphics.UI.Awesomium         as Aw
--- import qualified Graphics.UI.Awesomium.WebCore as Aw
-
--- import           Cartesian.Plane.Types
+import qualified Graphics.UI.GLFW as GLFW
 
 
 
@@ -73,25 +66,15 @@ import qualified Graphics.UI.GLFW                           as GLFW
 
 -- |
 -- type Mesh  = (GL.PrimitiveMode, GL.BufferObject, GL.BufferObject, Int, Maybe [GL.TextureObject])
-data Mesh = Mesh { _primitive        :: GL.PrimitiveMode,
-                   _attributeBuffers :: M.Map String (GL.BufferObject, Int),
-                   _numVertices      :: Int,
-                   _oTextures        :: [GL.TextureObject] }
+data Mesh = Mesh { fPrimitive        :: GL.PrimitiveMode,
+                   fAttributeBuffers :: M.Map String (GL.BufferObject, Int),
+                   fNumVertices      :: Int,
+                   fTextures         :: [GL.TextureObject] }
 
 
 type Meshes = M.Map String Mesh
 type World  = () -- TODO: Remove this (?)
 type Images = M.Map String (Image Word8)
-
-
--- | 
--- TODO: Should I use an unpacked representation instead (and use bitmasking)?
-type Pixel w = (w, w, w, w)
-type Image w = R.Array R.U R.DIM2 (Pixel w)
--- TODO: What's the difference between a storable array and an unpacked array?
---       Is it possible to convert between the two and if so, how expensive 
---       is the conversion?
--- type Image w = R.Array R.U R.DIM2 (Pixel w)
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -102,84 +85,80 @@ type Image w = R.Array R.U R.DIM2 (Pixel w)
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- |
-data AppState = AppState { _alive    :: Bool,
-                           _window   :: GLFW.Window,
-                           _debug    :: Debug,
-                           _input    :: Input Float,
-                           _paths    :: Paths,
-                           _world    :: World,
-                           _settings :: Settings,
-                           _ui       :: UI,
-                           _size     :: V2 Float,
-                           _graphics :: Graphics }
-
-
--- | Serialisable session (resume work when app starts)
--- data Session
+data AppState = AppState {
+  fAlive    :: Bool,
+  fWindow   :: GLFW.Window,
+  fDebug    :: Debug,
+  fInput    :: Float,
+  fPaths    :: Paths,
+  fSession  :: Session,
+  fSettings :: Settings,
+  fUi       :: UI,
+  fSize     :: V2 Float,
+  fGraphics :: Graphics
+}
 
 
 -- |
     -- let home = "C:/Users/Jonatan/Desktop/Haskell/projects/Pixels"
     -- let shaderpath = home </> "assets/shaders"
-data Paths = Paths { _home     :: FilePath,
-                     _assets   :: FilePath,
-                     _textures :: FilePath }
-             deriving (Show, Eq)
+data Paths = Paths {
+  fHome     :: FilePath,
+  fAssets   :: FilePath,
+  fTextures :: FilePath
+} deriving (Show, Eq)
+
+
+-- | Represents a single drawing surface
+data Canvas = Canvas { fTexture :: GL.TextureObject, fBuffer :: Image Word8 }
 
 
 -- |
-data LogLevel = InfoLevel | WarningLevel | CriticalLevel  deriving (Enum, Ord, Eq, Bounded, Read, Show)
-data Debug = Debug { _logLevel :: LogLevel, _startTime :: Double } deriving (Show, Eq, Read)
+-- TODO: Serialisable session (resume work when app starts)
+data Session = Session {}
 
 
 -- |
-data Input f = Input { _mouse :: Mouse f, _keyboard :: S.Set GLFW.Key, _command :: MVar String }
+-- data Tool = Tool 
+-- data Pencil = Pencil
 
 
 -- |
-data Mouse f = Mouse { _path :: [V2 f], _buttons :: S.Set GLFW.MouseButton }
+data LogLevel = InfoLevel | WarningLevel | CriticalLevel deriving (Enum, Ord, Eq, Bounded, Read, Show)
+data Debug = Debug { fLogLevel :: LogLevel, fStartTime :: Double } deriving (Show, Eq, Read)
 
 
 -- |
-data Graphics = Graphics { _program       :: GL.Program,
-                           _camera        :: Camera Float,
-                           _meshes        :: Meshes,
-                           _resources     :: CPUResources,
-                           _clearColour   :: GL.Color4 Float,
-                           _matModelview  :: M44 Float,
-                           _matProjection :: M44 Float} --, _viewport }
+data Input f = Input { fMouse :: Mouse f, fKeyboard :: S.Set GLFW.Key, fCommand :: MVar String }
+
+
+-- |
+data Mouse f = Mouse { fPath :: [V2 f], fButtons :: S.Set GLFW.MouseButton }
+
+
+-- |
+data Graphics = Graphics {
+  fProgram       :: GL.Program,
+  fCamera        :: Camera Float,
+  fMeshes        :: Meshes,
+  fResources     :: CPUResources,
+  fClearColour   :: GL.Color4 Float,
+  fMatModelview  :: M44 Float,
+  fMatProjection :: M44 Float
+} --, _viewport }
 
 
 -- | Graphics resources that are stored in CPU memory
-data CPUResources = CPUResources { _images :: Images }
+data CPUResources = CPUResources { fImages :: Images }
 
 
 -- |
 data UI = UI {}
--- data UI = UI { _view :: Aw.WebView }
+-- data UI = UI { fView :: Aw.WebView }
 
 -- |
 data Settings = Settings {}
 
 
 -- |
-data Camera f = Camera { _pan :: V3 Float, _rotation :: V3 Float }
-
-
--- |
-------------------------------------------------------------------------------------------------------------------------------------------------------
-
--- TODO: Use Cartesian instead...
-
-class HasX a f | a -> f where { x :: Lens a a f f }
-class HasY a f | a -> f where { y :: Lens a a f f }
-class HasZ a f | a -> f where { z :: Lens a a f f }
-
-instance HasX (V3 f) f where x = lens (\(V3 x' _ _) -> x') (\(V3 _ y' z') x' -> V3 x' y' z')
-instance HasY (V3 f) f where y = lens (\(V3 _ y' _) -> y') (\(V3 x' _ z') y' -> V3 x' y' z')
-instance HasZ (V3 f) f where z = lens (\(V3 _ _ z') -> z') (\(V3 x' y' _) z' -> V3 x' y' z')
-
-instance HasX (V2 f) f where x = lens (\(V2 x' _) -> x') (\(V2 _ y') x' -> V2 x' y')
-instance HasY (V2 f) f where y = lens (\(V2 _ y') -> y') (\(V2 x' _) y' -> V2 x' y')
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
+data Camera f = Camera { fPan :: V3 Float, fRotation :: V3 Float }

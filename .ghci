@@ -1,0 +1,8 @@
+:def hoogle \str -> return $ ":! hoogle --count=5 \"" ++ str ++ "\""
+:def greet  \str -> return $ "Hello there \"" ++ str ++ "!\""
+-- :set prompt "\955> "
+
+:set +m
+
+:set prompt  " > "
+:set prompt2 " > | "
