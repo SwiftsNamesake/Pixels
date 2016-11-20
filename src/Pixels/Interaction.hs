@@ -23,7 +23,8 @@
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 -- GHC pragmas
 ------------------------------------------------------------------------------------------------------------------------------------------------------
-{-# LANGUAGE NoImplicitPrelude      #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE FlexibleContexts  #-}
 
 
 
@@ -40,6 +41,7 @@ module Pixels.Interaction where
 import           Prelude hiding (putStrLn, putStr, print, putChar)
 import qualified Prelude as P
 
+import qualified Data.ByteString as B
 import           Data.Word
 import           Data.Function (on)
 import           Data.Bits
@@ -87,8 +89,11 @@ import Graphics.Rendering.OpenGL.GL.BufferObjects as GL
 import Graphics.Rendering.OpenGL.GL.Shaders       as GL --
 
 import           Leibniz.Constants (π)
+import Cartesian.Core (x,y,z)
 
-import qualified Graphics.Michelangelo.Shaders as Shaders
+import           Graphics.Michelangelo.Types (ShaderSource(..))
+import qualified Graphics.Michelangelo.Texture as Texture
+import qualified Graphics.Michelangelo.Shaders as Shader
 import           Graphics.Michelangelo.Transformations
 
 import           Pixels.Types
@@ -96,7 +101,7 @@ import           Pixels.Trinkets
 import           Pixels.Lenses as L
 import           Pixels.Render as Render
 import qualified Pixels.Walker as Walker
-import           Pixels.Load   as Load
+import qualified Pixels.Load   as Load
 
 
 
@@ -131,9 +136,9 @@ tick appref t = do
       band x y     = let width = 5 in abs (x^2 + y^2 - r^2) < (width^2)
       nearPath p   = any ((< 3) . norm . subtract (toLocalVector p)) path'
       toLocalVector p = let p' = fromIntegral <$> p in liftA2 (*) (app^.size) $ liftA2 (/) p' (fromIntegral <$> imSize)
-      im       = Render.createRepaImage (fromIntegral <$> imSize) (\p -> if nearPath p then (0,0,0,255) else (255,255,255,255))
-      [tex] = app^.graphics.L.meshes.at "mickey"._Just.oTextures
-  Render.modifyTexture (V2 0 0) im tex
+      im       = Texture.createRepaImage (fromIntegral <$> imSize) (\p -> if nearPath p then (0,0,0,255) else (255,255,255,255))
+      [tex] = app^.graphics.L.meshes.at "mickey"._Just.textures
+  Texture.modifyTexture (V2 0 0) im tex
 
 
 -- |
@@ -236,10 +241,13 @@ ondrop appref window paths = do
     [a, b] -> when (all ((==".glsl") . takeExtension) paths) $ do
       -- TODO: Determine which is pixel and which is vertex
       -- TODO: Handle errors
-      Right program' <- let (vs, ps) = if ("vertex" `isInfixOf` a) then (a,b) else (b,a) in Shaders.loadShaderProgram vs ps
+      let (vs, ps) = if ("vertex" `isInfixOf` a) then (a,b) else (b,a)
+      Right program' <-  Shader.createProgram (ShaderSource {fVertex=pack vs, fPixel=pack ps})
       modifyIORef appref (graphics.L.program .~ program')
       GL.currentProgram $= Just program'
     _  -> pass
+  where
+    pack = B.pack . map (fromIntegral . fromEnum)
 
 -- Setup ---------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -267,9 +275,9 @@ initialiseApp size'@(V2 w h) = runEitherT $ do
   meshes'  <- EitherT (Load.meshes (debug' t) size' paths')
   program' <- EitherT (Load.shaders (debug' t) (assetspath </> "shaders"))
 
-  let repaImage = Render.createRepaImage (V2 32 32) (\(V2 x y) -> (fromIntegral $ min (x*40) 255, fromIntegral $ min (y*40) 255,255,255))
-  repaTex <- lift $ textureFromImage repaImage
-  let meshes'' = meshes' & (at "mickey"._Just.oTextures .~ [repaTex])
+  let repaImage = Texture.createRepaImage (V2 32 32) (\(V2 x y) -> (fromIntegral $ min (x*40) 255, fromIntegral $ min (y*40) 255,255,255))
+  repaTex <- lift $ Texture.textureFromImage repaImage
+  let meshes'' = meshes' & (at "mickey"._Just.textures .~ [repaTex])
   -- settings' <- loadSettings
 
   command <- lift newEmptyMVar -- Asynchronous console interaction (fingers crossed)
@@ -280,22 +288,22 @@ initialiseApp size'@(V2 w h) = runEitherT $ do
   --
   lift (GL.currentProgram $= Just program')
 
-  let app = AppState { _alive    = True,
-                       _debug    = debug' t,
-                       _window   = window',
-                       _input    = Input { _mouse = Mouse { _path=[V2 0 0], _buttons=S.empty }, _keyboard = S.empty, _command=command },
-                       _settings = Settings {},
-                       _session  = Session {},
-                       _ui       = UI {},
-                       _size     = size',
-                       _graphics = Graphics { _program = program',
-                                              _camera  = Camera {  _pan = V3 0 0 0, _rotation = V3 0 0 0 },
-                                              _meshes  = meshes'',
-                                              _clearColour = GL.Color4 0.032 0.029 0.027 1.0,
-                                              _resources   = CPUResources { _images=M.fromList [("live", repaImage)] },
-                                              _matModelview  = mv ,
-                                              _matProjection = pm },
-                       _paths    = paths' }
+  let app = AppState { fAlive    = True,
+                       fDebug    = debug' t,
+                       fWindow   = window',
+                       fInput    = Input { fMouse = Mouse { fPath=[V2 0 0], fButtons=S.empty }, fKeyboard = S.empty, fCommand=command },
+                       fSettings = Settings {},
+                       fSession  = Session {},
+                       fUi       = UI {},
+                       fSize     = size',
+                       fGraphics = Graphics { fProgram = program',
+                                              fCamera  = Camera {  fPan = V3 0 0 0, fRotation = V3 0 0 0 },
+                                              fMeshes  = meshes'',
+                                              fClearColour = GL.Color4 0.032 0.029 0.027 1.0,
+                                              fResources   = CPUResources { fImages=M.fromList [("live", repaImage)] },
+                                              fMatModelview  = mv ,
+                                              fMatProjection = pm },
+                       fPaths    = paths' }
   appref <- lift $ newIORef app
 
   lift $ do
@@ -312,8 +320,8 @@ initialiseApp size'@(V2 w h) = runEitherT $ do
     pm = perspective (60.0 * π/180.0) (w/h) (-1.0) 100.0
 
     -- TODO: Don't hard-code the root
-    debug' t = Debug { _logLevel = WarningLevel, _startTime = t }
-    paths' = Paths { _home = homepath, _assets = assetspath, _textures = texturepath }
+    debug' t = Debug { fLogLevel = WarningLevel, fStartTime = t }
+    paths' = Paths { fHome = homepath, fAssets = assetspath, fTextures = texturepath }
     homepath    = "C:/Users/Jonatan/Desktop/Haskell/projects/Pixels"
     assetspath  = homepath </> "assets"
     texturepath = assetspath </> "textures"
@@ -370,7 +378,7 @@ main :: IO ()
 main = eitherT (putStrLn) (return) $ do
   --
   lift $ do
-    logStr (Debug { _logLevel=InfoLevel }) InfoLevel 1 "Testing random walks"
+    logStr (Debug { fLogLevel=InfoLevel }) InfoLevel 1 "Testing random walks"
     watchFiles
     setupOpenGL --
     -- webview <- Aw.createWebview w h False

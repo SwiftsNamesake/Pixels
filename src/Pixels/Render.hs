@@ -60,12 +60,6 @@ import           Control.Monad
 
 import qualified Graphics.UI.GLFW as GLFW
 
-import Graphics.Rendering.OpenGL                  as GL hiding (projection, perspective, Line, position, ortho)
-import Graphics.Rendering.OpenGL.GL.BufferObjects as GL
-import Graphics.Rendering.OpenGL.GL.Shaders       as GL --
-import Graphics.Rendering.OpenGL.GL.Texturing     as GL --
-import Graphics.GLUtil as GL
-
 -- import Graphics.Rendering.FTGL as FTGL
 -- import Graphics.Rendering.TrueType.STB as STB
 
@@ -146,6 +140,7 @@ draw :: Debug -> V3 Float -> Program -> M44 Float -> M44 Float -> Mesh -> IO ()
 draw db mouse program pm mv mesh = do
   
   -- TODO: Factor out
+
   t <- realToFrac . fromMaybe 0.0 <$> GLFW.getTime -- Time (s)
   logStr db InfoLevel 1 "Drawing mesh"
 
@@ -243,7 +238,8 @@ render app = do
     screenToWorld (V3 x' y' z') = V3 (x'-w/2) (-y'+h/2) (z') -- TODO: Make sure this is correct and robust
 
     -- Mouse
-    mouse'     = from2D . (!!0) $ app^.input.mouse.path --
+    -- mouse'     = from2D . (!!0) $ app^.input.mouse.path --
+    mouse' = V3 0 0 0 -- TODO: Fix
     worldMouse = screenToWorld mouse'                   -- Mouse position in world coords
 
 

@@ -35,17 +35,7 @@ flag profiled
 
 
 library
-  ghc-options:         -fwarn-tabs
-                       -fwarn-unused-imports
-                       -- -fwarn-name-shadowing
-                       -fwarn-incomplete-uni-patterns
-                       -fwarn-incomplete-patterns
-                       -fwarn-overlapping-patterns
-                       -fwarn-incomplete-record-updates
-                       -fwarn-missing-signatures
-                       -fwarn-monomorphism-restriction
-                       -fwarn-orphans
-                       -- -dump-splices
+  ghc-options:         -Wall
 
   default-extensions:  DuplicateRecordFields, FunctionalDependencies, MultiParamTypeClasses, FlexibleInstances
   
@@ -59,9 +49,7 @@ library
                        Pixels.Trinkets,
                        Pixels.Load,
                        Pixels.Canvas
-                       Pixels.Plugins,
-
-                       Pixels.Console
+                       Pixels.Plugins
 
   build-depends:         base            >= 4.5 && <= 5
                        , reactive-banana
@@ -71,10 +59,13 @@ library
                        , repa            == 3.4.*
                        , repa-io         >= 3.4 && < 3.5
                        , FontyFruity
+                       , GPipe
+                       , GPipe-GLFW
                        , colour          >= 2.3.3 && < 2.4
                        , vector
                        , text
                        , GLFW-b
+                       , bytestring
                        , linear
                        , attoparsec
                        , transformers
@@ -98,7 +89,6 @@ library
                        , ansi-terminal
                        -- monad-transformers
                        -- glob
-                       , Michelangelo
                        , Cartesian >= 0.5
                        , Leibniz
 

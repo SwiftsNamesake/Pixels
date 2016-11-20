@@ -69,12 +69,9 @@ import Graphics.GLUtil           as GL
 
 import Foreign.C.Types (CUChar)
 
+import qualified Graphics.Text.TrueType as TT
+
 import           Leibniz.Constants (π)
-
-import qualified Graphics.Text.TrueType        as TT
-
-import qualified Graphics.Michelangelo.Shaders as Shaders
-import qualified Graphics.Michelangelo.Shapes  as Shapes
 
 import           Pixels.Types
 import qualified Pixels.Lenses as L
@@ -139,7 +136,7 @@ tessellate f as = concatMap f . Shapes.triangles $ as
 
 -- |
 shaders :: Debug -> FilePath -> IO (Either String GL.Program)
-shaders db root = Shaders.loadProgram (root </> "shader-vertex.glsl") (root </> "shader-pixel.glsl")
+shaders db root = Shaders.loadProgram (ShaderPaths { fVertex = (root </> "shader-vertex.glsl"), fPixel = (root </> "shader-pixel.glsl")})
 
 
 -- |

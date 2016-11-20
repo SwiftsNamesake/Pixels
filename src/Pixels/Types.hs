@@ -50,8 +50,6 @@ import Control.Lens
 
 import Control.Concurrent.MVar
 
-import Graphics.Michelangelo.Types (Image)
-
 import qualified Graphics.Rendering.OpenGL as GL
 
 import qualified Graphics.UI.GLFW as GLFW
@@ -74,7 +72,7 @@ data Mesh = Mesh { fPrimitive        :: GL.PrimitiveMode,
 
 type Meshes = M.Map String Mesh
 type World  = () -- TODO: Remove this (?)
-type Images = M.Map String (Image Word8)
+type Images = M.Map String (Image (Pixel Word8))
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -89,7 +87,7 @@ data AppState = AppState {
   fAlive    :: Bool,
   fWindow   :: GLFW.Window,
   fDebug    :: Debug,
-  fInput    :: Float,
+  fInput    :: Input Float,
   fPaths    :: Paths,
   fSession  :: Session,
   fSettings :: Settings,
