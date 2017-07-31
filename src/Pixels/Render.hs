@@ -1,10 +1,11 @@
-
---
--- Pixels.Render
--- Rendering...
---
--- Jonatan H Sundqvist
--- August 19 2016
+-- |
+-- Module      : Pixels.Render
+-- Description : Rendering...
+-- Copyright   : (c) Jonatan H Sundqvist, 2016
+-- License     : MIT
+-- Maintainer  : Jonatan H Sundqvist
+-- Stability   : experimental
+-- Portability : Not Sure
 --
 
 -- TODO | - Logging (ornate, sophisticated, colours, LOG, ERROR, etc.)
@@ -15,246 +16,244 @@
 -- SPEC | -
 --        -
 
+-- GHC Pragmas -----------------------------------------------------------------------------------------------------------------------------
 
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- GHC Pragmas
-------------------------------------------------------------------------------------------------------------------------------------------------------
 {-# LANGUAGE ViewPatterns           #-}
 {-# LANGUAGE TupleSections          #-}
-{-# LANGUAGE NoImplicitPrelude      #-}
 {-# LANGUAGE InstanceSigs           #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
---{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE DuplicateRecordFields  #-}
+{-# LANGUAGE FlexibleContexts       #-}
 
+-- API -------------------------------------------------------------------------------------------------------------------------------------
 
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- API
-------------------------------------------------------------------------------------------------------------------------------------------------------
 module Pixels.Render where
 
-
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- We'll need these
-------------------------------------------------------------------------------------------------------------------------------------------------------
-import           Prelude hiding (putStrLn, putStr, print, putChar)
--- import qualified Prelude as P
-
-import Text.Printf
-
--- import Linear.Projection
--- import Linear.Quaternion
-import Linear (M44, (!*!), translation, identity, perspective, ortho, V2(..), V3(..))
+-- We'll need these ------------------------------------------------------------------------------------------------------------------------
 
 -- import           Data.Bits
 import           Data.Word
-import           Data.Maybe (fromMaybe)
+import           Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Map         as M
+import qualified Data.Vector.Storable as VS
+import           Data.Foldable (toList)
 
-import           Control.Monad.Trans.Either
-import           Control.Lens hiding (argument)
-import           Control.Monad
+import qualified Codec.Picture       as Juicy
+import qualified Codec.Picture.Types as Juicy
+
+import Text.Printf
+
+import Linear (M44, (!*!), (!*), translation, identity, perspective, ortho, V2(..), V3(..))
+
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Either
+import Control.Lens hiding (argument)
+import Control.Monad
 -- import           Control.Applicative ((<$>), (<*>), liftA2)
-
-import qualified Graphics.UI.GLFW as GLFW
 
 -- import Graphics.Rendering.FTGL as FTGL
 -- import Graphics.Rendering.TrueType.STB as STB
+import           Graphics.GPipe hiding (texture, render)
+import qualified Graphics.GPipe as GPipe
+import qualified Graphics.GPipe.Context.GLFW        as Context
+-- import           Graphics.GPipe.Context.GLFW.Unsafe (GLFWWindow (..))
 
-import Foreign.Storable
-import Foreign.Storable.Tuple ()
-import Foreign.C.Types        (CUChar)
-import Foreign.Marshal    as Marshal hiding (void)
-import Foreign.Ptr        as Ptr
-import Foreign.ForeignPtr as FPtr
+import Geometry.Sculptor.Shapes hiding (Face)
 
 import Leibniz.Constants (π)
 import Cartesian.Core (x,y,z)
 
-import           Graphics.Michelangelo.Transformations
-import qualified Graphics.Michelangelo.Shaders as Shader
-import           Graphics.Michelangelo.Texture (setTexture)
-import qualified Graphics.Michelangelo.Shapes  as Shapes
-import           Graphics.Michelangelo.Types (Matrix44(..))
-
 import Pixels.Types
-import Pixels.Lenses as L
 import Pixels.Trinkets
 
-
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- Functions
-------------------------------------------------------------------------------------------------------------------------------------------------------
-
--- OpenGL state-machinery ----------------------------------------------------------------------------------------------------------------------------
+-- Functions -------------------------------------------------------------------------------------------------------------------------------
 
 -- |
-setupOpenGL :: IO ()
-setupOpenGL = do
-  putStrLn "Setting up OpenGL"
-  clearColor $= GL.Color4 0.032 0.029 1.027 1.0
-
-  blendFunc $= (GL.SrcAlpha, GL.OneMinusSrcAlpha)
-  blend     $= GL.Enabled
-  depthFunc $= Just GL.Lequal
-  -- depthMask $= GL.Enabled
-  -- depthTest $= GL.Enabled
-
-  texture2DWrap $= (GL.Repeated, GL.ClampToEdge)
-  textureFilter   Texture2D   $= ((Linear', Nothing), Linear') -- TODO: We need to change this if we want pixel-perfect zooming
-  textureWrapMode Texture2D S $= (Mirrored, ClampToEdge)
-  textureWrapMode Texture2D T $= (Mirrored, ClampToEdge)
-
-
--- | Frame buffer objects
-createFBO :: IO ()
-createFBO = do
-  return ()
-
-
--- |
--- TODO: Move to Michelangelo
-attribute :: Integral n => (GL.AttribLocation, GL.BufferObject, n) -> IO ()
-attribute (loc, buffer, count) = do
-  GL.vertexAttribArray loc     $= GL.Enabled                                                                         --
-  GL.bindBuffer GL.ArrayBuffer $= Just buffer                                                                        --
-  GL.vertexAttribPointer loc   $= (GL.ToFloat, GL.VertexArrayDescriptor (fromIntegral count) GL.Float 0 GL.offset0) --
-
--- Camera operations ---------------------------------------------------------------------------------------------------------------------------------
-
--- | TODO: Rename
--- positionCamera :: Camera -> IO ()
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
-
--- |
--- TODO: Rename (too similar to render)
--- TODO: Error handling
--- TODO: Arbitrary uniforms and attributes  (?)
--- TODO: Custom setup functions (per mesh)  (?)
--- TODO: Cache attrib and uniform locations (?)
-draw :: Debug -> V3 Float -> Program -> M44 Float -> M44 Float -> Mesh -> IO ()
-draw db mouse program pm mv mesh = do
-  
-  -- TODO: Factor out
-
-  t <- realToFrac . fromMaybe 0.0 <$> GLFW.getTime -- Time (s)
-  logStr db InfoLevel 1 "Drawing mesh"
-
-  -- Set attribute buffers
-  forM ["aVertexPosition", "aVertexColor", "aTexCoord"] $ \attr -> do
-    logStr db InfoLevel 2 $ printf "Setting attribute: %s" attr
-    loc <- get $ attribLocation  program attr
-    logStr db InfoLevel 2 $ printf "%s" (show loc)
-    -- TODO: Use EitherT instead of assuming the item is found
-    let Just (buffer, count) = M.lookup attr (mesh^.attributeBuffers)
-    logStr db InfoLevel 2 $ printf "(Buffer: %s, Count: %d)" (show buffer) count
-    attribute (loc, buffer, count)
-  
-  -- Set uniform values
-  forM [("uMVMatrix", wrap $ Matrix44 mv),
-        ("uPMatrix",  wrap $ Matrix44 pm),
-        ("uMouseVec", wrap $ mouse),
-        -- ("uTex0",     wrap $ (0 :: GLint)),
-        ("uTime",     wrap $ (t :: GLfloat))] $ \(u, v) -> do
-    logStr db InfoLevel 2 $ printf "Setting uniform: %s" (show u)
-    get (GL.uniformLocation program u) >>= v
-  
-  -- Set texture
-  when (not . null $ mesh^.textures) $ do
-    logStr db InfoLevel 2 "Setting texture"
-    setTexture program $ chooseTexture (mesh^.textures) t
-  
-  logStr db InfoLevel 2 $ printf "Drawing arrays (%d vertices)" (mesh^.numVertices)
-  GL.drawArrays (mesh^.primitive) 0 (fromIntegral $ mesh^.numVertices) --
-  where
-    chooseTexture [tex] _ = tex
-    chooseTexture texes t = texes !! mod (frame t) (length texes)
-
-    fps = 12 -- TODO: Move this (along with all animation logic)
-    frame t = floor $ t*fps
-
-    wrap :: (Show u, GL.Uniform u) => u -> GL.UniformLocation -> IO ()
-    wrap v loc = do
-      logStr db InfoLevel 2 $ printf "Setting uniform: (Location=%s, Value=%s)" (show loc) (show v)
-      GL.uniform loc $= v
-
-
--- | 
--- TODO: Scenes and cameras
-render :: AppState -> IO ()
+render :: App os -> AppT os ()
 render app = do
+  GPipe.render $ do
+    clearContextColor (pure 0.74)
+    clearContextDepth 1.0
+    vertexArray <- newVertexArray (app^.canvas.vertices)
+    (app^.shader) $ ShaderEnvironment {
+                      fRasterOptions  = app^.rasterOptions,
+                      fUniforms       = app^.uniforms,
+                      fPrimitiveArray = toPrimitiveArray TriangleList vertexArray,
+                      fTexture        = TextureEnvironment {
+                                          fFilterMode = SamplerNearest, -- TODO: Snap to nearest instead
+                                          fEdgeMode   = (pure ClampToEdge), --, pure 1),
+                                          fTexture    = app^.canvas.texture }
+                    }
 
-  -- OpenGL config
-  GL.lineWidth $= 0.01
-  -- GL.lineStipple $= Just (4, 0xFF)
+-- Geometry --------------------------------------------------------------------------------------------------------------------------------
 
-  -- Clear
-  blendFunc $= (GL.SrcAlpha, GL.OneMinusSrcAlpha)
-  blend     $= GL.Enabled
-  depthFunc $= Just GL.Lequal
-
-  GL.clearColor $= (app^.graphics.L.clearColour)
-  GL.clear [GL.ColorBuffer, GL.DepthBuffer]
-
-
-  let program'  = app^.graphics.L.program
-      meshes'   = app^.graphics.meshes
-      onmissing = printf "Could not find mesh: %s" 
-      invertY   = y %~ ((+ h) . negate) -- Negate and shift by the height
-      drawIt prepare t mesh = prepare >> draw (app^.debug) (invertY mouse') program' pm (mv !*! translate t) mesh
-  forM [("grid",      V3     0  0 10, pass),
-        ("flame",     V3 ( 300) 0 20, pass),
-        ("flame2",    V3 ( 300) 0 20, pass),
-        ("square",    V3     0  0 10, pass),
-        ("message",   V3     0  0 60, (GL.lineWidth $= 2.0)),
-        ("fox",       V3 (-400) 0 10, pass),
-        ("interface", V3     0  0  5, pass),
-        ("mickey",    V3     0  0  0, pass)] $ \(key, t, prepare) -> do
-    logStr (app^.debug) InfoLevel 2 (printf "Drawing %s" key)
-    maybe (onmissing key) (drawIt prepare t) (M.lookup key meshes')
-
-  -- Swap buffers
-  GLFW.swapBuffers (app^.window)
+-- |
+newQuadXY :: V2 Float -> (V3 Float -> V2 Float) -> AppT os (Buffer os VertexAttributes)
+newQuadXY (V2 dx dy) texcoord = do
+  vertexBuffer :: Buffer os VertexAttributes <- newBuffer (length vertices)
+  writeBuffer vertexBuffer 0 vertices
+  return vertexBuffer
   where
-    -- App data
-    (V2 w h) = app^.size
-    cam      = app^.graphics.camera
+    makeVertex v = (to4D 1 v, texcoord v)
+    vertices = map makeVertex (concat . triangles $ planeXY V3 dx dy)
 
-    -- Matrix functions
-    translate :: Num n => V3 n -> M44 n
-    translate by = identity & (translation .~ by)
+--------------------------------------------------------------------------------------------------------------------------------------------
 
+newCanvas :: V2 Int -> AppT os (Canvas os)
+newCanvas size = do
+  tex <- new size (\x y -> V3 30 20 240)
+  vs  <- newQuadXY (fmap fromIntegral size) texcoord
+  return $ Canvas { fSize = size, fTexture = tex, fVertices = vs }
 
-    -- Matrices
-    mv = (app^.graphics.matModelview) !*! (translate (negate $ cam^.pan)) !*! rotateY (cam^.rotation.y)
-    pm = (app^.graphics.matProjection)
+-- Uniforms --------------------------------------------------------------------------------------------------------------------------------
 
-    -- Coordinate space operations
-    from2D (V2 x' y') = V3 x' y' 0
-    screenToWorld (V3 x' y' z') = V3 (x'-w/2) (-y'+h/2) (z') -- TODO: Make sure this is correct and robust
+-- |
+-- TODO: Wrap in maybe (?)
 
-    -- Mouse
-    -- mouse'     = from2D . (!!0) $ app^.input.mouse.path --
-    mouse' = V3 0 0 0 -- TODO: Fix
-    worldMouse = screenToWorld mouse'                   -- Mouse position in world coords
+uMatrix :: Int -> Shader os (ContextFormat RGBFloat Depth) (ShaderEnvironment os) (UniformFormat (M44 (B Float)) a)
+uMatrix i = getUniform $ \sh -> (sh^.uniforms.matrices.buffer, i)
+
+uScalar :: Int -> Shader os (ContextFormat RGBFloat Depth) (ShaderEnvironment os) (UniformFormat (B Float) a)
+uScalar i = getUniform $ \sh -> (sh^.uniforms.scalars.buffer, i)
+
+uVector :: Int -> Shader os (ContextFormat RGBFloat Depth) (ShaderEnvironment os) (UniformFormat (B3 Float) a)
+uVector i = getUniform $ \sh -> (sh^.uniforms.vectors.buffer, i)
 
 
 -- |
--- http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-14-render-to-texture/
-renderToTexture :: IO ()
-renderToTexture = do
-  --
-  putStrLn "Rendering to texture"
+newUniforms :: AppT os (UniformData os)
+newUniforms = do
+  scalars'  <- newUniformBuffer 3 (0)
+  matrices' <- newUniformBuffer 3 (identity)
+  vectors'  <- newUniformBuffer 3 (pure 0)
 
-  -- Create render target
-  -- [name] <- GL.genFramebuffers 1
-  -- GL.bindFramebuffer GL.FRAMEBUFFER name
-  return ()
+  return $ UniformData {
+    fMatrices = matrices',
+    fScalars  = scalars',
+    fVectors  = vectors'
+  }
 
 
 -- |
--- stipple :: 
+newUniformBuffer :: BufferFormat a => Int -> HostFormat a -> AppT os (UniformBlock os (HostFormat a) a)
+newUniformBuffer n v = do
+  b <- newBuffer n
+  let vs = (replicate n v)
+  writeBuffer b 0 vs
+  return $ UniformBlock { fBuffer = b, fSize = n, fValues = vs }
+
+-- Shaders ---------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+texturedShader :: Shader os (ContextFormat RGBFloat Depth) (ShaderEnvironment os) (FragmentStream (ColorSample F RGBFloat))
+texturedShader = do
+  -- Read the uniforms
+  [pv, mv] <- mapM uMatrix [0,1]
+  mouse <- uVector 0
+
+  -- One day, in the distant future, I will come to know what a primitive stream is
+  primitiveStream <- toPrimitiveStream (^.primitiveArray)
+  fragmentStream <- rasterize (^.rasterOptions) (fmap (_1 %~ \pos -> pv !*! mv !* pos) primitiveStream)
+  samp <- newSampler2D (\env -> (env^.texture.texture, env^.texture.filterMode, (pure ClampToEdge, 0)))
+  let sampleTexture = sample2D samp SampleAuto Nothing Nothing
+  return $ fmap sampleTexture fragmentStream
+
+-- Textures --------------------------------------------------------------------------------------------------------------------------------
+
+-- TODO: Don't hard-code pixel type
+
+-- |
+pixel :: Juicy.ColorSpaceConvertible c Juicy.PixelRGB8 => [V3 Juicy.Pixel8] -> a -> b -> c -> [V3 Juicy.Pixel8]
+pixel xs _ _ pix = let Juicy.PixelRGB8 r g b = Juicy.convertPixel pix in V3 r g b : xs
+
+
+-- |
+-- saves :: FilePath -> Texture2D os (HostFormat (BufferColor (Color a (ColorElement a)) a)) -> (a -> V3 Float) -> AppT os ()
+save :: FilePath -> Texture2D os (Format RGBFloat) -> (V3 Float -> V3 Float) -> AppT os ()
+save fn tex f = do
+  pixels <- readTexture2D tex 0 (V2 0 0) size (\ps c -> return $ convert (f c) ++ ps) []
+  liftIO $ Juicy.savePngImage fn (Juicy.ImageRGB8 $ image size pixels)
+  where
+    (size:_) = texture2DSizes tex
+    image (V2 dx dy) pixels = Juicy.Image { Juicy.imageWidth = dx, Juicy.imageHeight = dy, Juicy.imageData = VS.fromList pixels }
+    pixel8    = floor . (*255)
+    convert c = let (V3 r g b) = fmap pixel8 c in [r, g, b]
+
+
+-- |
+-- TODO: Clean this up
+load :: FilePath -> AppT os (Either String (Texture2D os (Format RGBFloat)))
+load fn = runEitherT $ do
+  (Juicy.ImageRGB8 image) <- EitherT (liftIO $ Juicy.readImage fn)
+  let size = V2 (Juicy.imageWidth image) (Juicy.imageHeight image)
+  tex <- lift $ fromPixels size (Juicy.pixelFold pixel [] image)
+  return tex
+
+
+-- |
+new :: V2 Int -> (Int -> Int -> V3 Juicy.Pixel8) -> AppT os (Texture2D os (Format RGBFloat))
+new size@(V2 dx dy) f = fromPixels size [f x y | x <- [0..dx-1], y <- [0..dy-1]]
+
+
+-- |
+-- TODO: Rename (?)
+pixelAt :: V2 Int -> Texture2D os (Format RGBFloat) -> AppT os (Maybe (V3 Float))
+pixelAt from tex = do
+  mpixels <- readPixels from (V2 1 1) tex
+  return $ mpixels >>= listToMaybe
+
+
+-- |
+guardTexturePoint :: V2 Int -> Texture2D os (Format RGBFloat) -> Maybe (V2 Int)
+guardTexturePoint p tex = do
+  wholesize <- listToMaybe $ texture2DSizes tex -- TODO: Allow any level
+  if fits p wholesize
+    then Just p
+    else Nothing
+  where
+    fits (V2 x y) (V2 dx dy) = (0 <= x && x < dx) && (0 <= y && y < dy)
+
+
+-- |
+guardTextureSection :: V2 Int -> V2 Int -> Texture2D os (Format RGBFloat) -> Maybe (V2 Int, V2 Int)
+guardTextureSection from size tex = (,) <$> guardTexturePoint from tex <*> fmap (const size) (guardTexturePoint (from+size) tex)
+
+
+-- |
+-- TODO | - Figure out order and format
+--        - Make polymorphic
+--        - Refactor
+readPixels :: V2 Int -> V2 Int -> Texture2D os (Format RGBFloat) -> AppT os (Maybe [V3 Float])
+readPixels from size tex = maybe
+                             (return Nothing)
+                             (const $ fmap Just $ readTexture2D tex level from size (\ps c -> return (c:ps)) [])
+                             (guardTextureSection from size tex)
+  where
+    level = 0
+
+
+-- | Creates a texture from a 'Foldable' of pixels
+-- TODO: Make sure the size is correct
+-- TODO: Figure out what the layout is (eg. col-major, row-major, etc.)
+fromPixels :: Foldable t => V2 Int -> t (V3 Juicy.Pixel8) -> AppT os (Texture2D os (Format RGBFloat))
+fromPixels size pixels = do
+  -- TODO: What the hell is 'maxBound' doing here (?)
+  tex <- newTexture2D SRGB8 size maxBound -- JPG converts to SRGB
+  writeTexture2D tex 0 (V2 0 0) size (toList pixels)
+  generateTexture2DMipmap tex
+  return tex
+
+
+-- |
+-- TODO | - How to deal with errors
+writePixel :: V2 Int -> V3 Juicy.Pixel8 -> Texture2D os (Format RGBFloat) -> AppT os (Either String ())
+writePixel p pixel tex = maybe
+                           (return $ Left "writePixel: Coordinate out of range")
+                           (const $ fmap Right $ writeTexture2D tex 0 p (V2 1 1) [pixel])
+                           (guardTexturePoint p tex)
+
+
+-- | Creates a monochrome texture
+monochrome :: V2 Int -> V3 Juicy.Pixel8 -> AppT os (Texture2D os (Format RGBFloat))
+monochrome size@(V2 dx dy) colour = fromPixels size (replicate (dx*dy) colour)

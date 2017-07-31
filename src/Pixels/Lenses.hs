@@ -1,62 +1,39 @@
+-- |
+-- Module      : Pixels.Lenses
+-- Description : Auto-generated lenses
+-- Copyright   : (c) Jonatan Sundqvist, 2017
+-- License     : MIT
+-- Maintainer  : Jonatan Sundqvist
+-- Stability   : 
+-- Portability : 
+-- 
 
---
--- Pixels.Lenses
--- Lenses...
---
--- Jonatan H Sundqvist
--- August 20 2016
---
-
--- TODO | -
---        -
+-- TODO | - 
+--        - 
 
 -- SPEC | -
 --        -
 
 
 
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- GHC directives
-------------------------------------------------------------------------------------------------------------------------------------------------------
-{-# LANGUAGE TemplateHaskell        #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE FlexibleInstances      #-}
+-- GHC Pragmas ---------------------------------------------------------------------------------------------------------------------------------------
 
+{-# LANGUAGE TemplateHaskell #-}
 
+--- API ----------------------------------------------------------------------------------------------------------------------------------------------
 
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- API
-------------------------------------------------------------------------------------------------------------------------------------------------------
 module Pixels.Lenses where
 
+-- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- We'll need these
-------------------------------------------------------------------------------------------------------------------------------------------------------
 import Control.Lens
-
 import Pixels.Types
 
+-- Definitions ---------------------------------------------------------------------------------------------------------------------------------------
 
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- Lenses
-------------------------------------------------------------------------------------------------------------------------------------------------------
-
--- type Mesh  = (GL.BufferObject, GL.BufferObject, Int)
--- type World = ()
-
--- TODO: Prevent clashes (use a more sophisticated lens generator)
--- runQ . sequence $ map makeLenses [''AppState, ''Paths , ''Mesh , ''Debug , ''Input , ''Mouse , ''Settings , ''Graphics , ''Camera]
-makeLensesWith abbreviatedFields ''AppState
-makeLensesWith abbreviatedFields ''Paths
-makeLensesWith abbreviatedFields ''Mesh
-makeLensesWith abbreviatedFields ''Debug
-makeLensesWith abbreviatedFields ''Input
-makeLensesWith abbreviatedFields ''Mouse
-makeLensesWith abbreviatedFields ''Settings
-makeLensesWith abbreviatedFields ''Graphics
-makeLensesWith abbreviatedFields ''Camera
-makeLensesWith abbreviatedFields ''CPUResources
+makeLensesWith abbreviatedFields ''App
+makeLensesWith abbreviatedFields ''Canvas
+makeLensesWith abbreviatedFields ''UniformData
+makeLensesWith abbreviatedFields ''UniformBlock
+makeLensesWith abbreviatedFields ''ShaderEnvironment
+makeLensesWith abbreviatedFields ''TextureEnvironment

@@ -2,18 +2,17 @@ flags: {}
 packages:
 - '.'
 - location: C:/Users/Jonatan/Desktop/Haskell/modules/Cartesian
-- location: C:/Users/Jonatan/Desktop/Haskell/modules/Michelangelo
 - location: C:/Users/Jonatan/Desktop/Haskell/modules/Leibniz
+- location: C:/Users/Jonatan/Desktop/Haskell/modules/cubist-sculptor
 - location:
-    git: https://github.com/feuerbach/ansi-terminal.git
-    commit: bf4995c7dc3ab3caa4c7051a7f1988f3a457faea
+    git: https://github.com/plredmond/GPipe-GLFW.git
+    commit: d7dddd2d01fa84d4de0639d298cc787da0607c1c
+  subdirs:
+    - GPipe-GLFW
+  extra-dep: true
 extra-deps:
-- GLUtil-0.9.1.0
-- hpp-0.3.1.0
-- pqueue-1.3.1.1
-- reactive-banana-1.1.0.1
-- storable-tuple-0.0.3.2
-- GPipe-2.1.8
+- GPipe-2.2.1
+- gl-0.8.0
 compiler-check: newer-minor
 arch: x86_64
 resolver: lts-7.0

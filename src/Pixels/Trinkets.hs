@@ -6,12 +6,12 @@
 -- Maintainer  : Jonatan H Sundqvist
 -- Stability   : experimental|stable
 -- Portability : POSIX (not sure)
--- 
+--
 
 -- Created August 27 2016
 
--- TODO | - 
---        - 
+-- TODO | -
+--        -
 
 -- SPEC | -
 --        -
@@ -31,12 +31,17 @@
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 -- API
 ------------------------------------------------------------------------------------------------------------------------------------------------------
-module Pixels.Trinkets (flushed,
-                        pass, execute, sequencePairs,
-                        hasExtension,
-                        putStr, putStrLn, putChar, print,
-                        flatten, asList,
-                        logStr, indentedStrLn) where
+module Pixels.Trinkets (
+  flushed,
+  pass, execute, sequencePairs,
+  hasExtension,
+  putStr, putStrLn, putChar, print,
+  flatten, asList,
+  indentedStrLn,
+
+  to2D, to3D, to4D, dropY, dropZ, dropZW,
+  axisRotation, texcoord
+) where
 
 
 
@@ -48,6 +53,7 @@ import qualified Prelude as P
 
 import Data.Foldable as F
 
+import Linear (V0(..), V1(..), V2(..), V3(..), V4(..), M33, Epsilon, axisAngle, fromQuaternion)
 -- import Text.Printf
 
 import Control.Monad.Trans.Either
@@ -60,7 +66,6 @@ import System.IO (stdout, hFlush) --
 import System.Console.ANSI (setSGR, SGR(..), Color(..), ConsoleLayer(..), ColorIntensity(Vivid))
 
 import Pixels.Types
-import Pixels.Lenses
 
 
 
@@ -149,8 +154,8 @@ putWithSGR = void . mapM (either setSGR putStr)
 
 
 -- |
-shouldLog :: Debug -> LogLevel -> Bool
-shouldLog db logLvl = (logLvl) >= (db^.logLevel)
+-- shouldLog :: Debug -> LogLevel -> Bool
+-- shouldLog db logLvl = (logLvl) >= (db^.logLevel)
 
 
 -- |
@@ -158,18 +163,18 @@ shouldLog db logLvl = (logLvl) >= (db^.logLevel)
 -- TODO: Rendering log messages
 -- TODO: Indent multiple lines (?)
 -- TODO: Break up filtering (when) and formatting (putWithSGR)
-logStr :: Debug -> LogLevel -> Int -> String -> IO ()
-logStr db logLvl indentLvl s = when (shouldLog db logLvl) $ putWithSGR [Right $ indent indentLvl "[",
-                                                                        Left  $ [SetColor Foreground Vivid fg],
-                                                                        Right $ label,
-                                                                        Left  $ [SetColor Foreground Vivid White],
-                                                                        Right $ "] " ++ message]
-  where
-    message = let (l:ines) = lines s in unlines $ l : map (indent indentLvl) ines -- The first line has already been indented
-    (fg, label) = case logLvl of
-      InfoLevel     -> (Green,  "Info")
-      WarningLevel  -> (Yellow, "Warning")
-      CriticalLevel -> (Red,    "Critical")
+-- logStr :: Debug -> LogLevel -> Int -> String -> IO ()
+-- logStr db logLvl indentLvl s = when (shouldLog db logLvl) $ putWithSGR [Right $ indent indentLvl "[",
+--                                                                         Left  $ [SetColor Foreground Vivid fg],
+--                                                                         Right $ label,
+--                                                                         Left  $ [SetColor Foreground Vivid White],
+--                                                                         Right $ "] " ++ message]
+--   where
+--     message = let (l:ines) = lines s in unlines $ l : map (indent indentLvl) ines -- The first line has already been indented
+--     (fg, label) = case logLvl of
+--       InfoLevel     -> (Green,  "Info")
+--       WarningLevel  -> (Yellow, "Warning")
+--       CriticalLevel -> (Red,    "Critical")
 
 --- Control ------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -187,15 +192,62 @@ execute = void . runEitherT
 -- TODO: Rename (?)
 sequencePairs :: Monad m => [(a, m b)] -> m [(a,b)]
 sequencePairs ps = let invert (a, b) = b >>= return . (a,) in sequence . map invert $ ps
-    
 
 -- Coordinate systems --------------------------------------------------------------------------------------------------------------------------------
 
--- |    
+-- |
 snapToNearest :: (Num (v f), RealFrac f, Applicative v) => v f -> v f -> v f -> v f
 snapToNearest resolution point origin = liftA2 snap' resolution (point - origin) + origin
   where
     snap' res v = res * (fromIntegral . round $ v/res) -- Snaps in one dimensions
+
+
+-- TODO | - Clear up the naming confusion (some drop, some add)
+
+
+-- | Drops the Z coordinate
+to2D :: f -> V1 f -> V2 f
+to2D y (V1 x) = V2 x y
+
+
+-- | Adds the Z coordinate
+to3D :: f -> V2 f -> V3 f
+to3D z (V2 x y) = V3 x y z
+
+
+-- | Adds the W coordinate
+to4D :: f -> V3 f -> V4 f
+to4D w (V3 x y z) = V4 x y z w
+
+
+-- |
+dropY :: V2 f -> V1 f
+dropY (V2 x _) = V1 x
+
+
+-- |
+dropZ :: V3 f -> V2 f
+dropZ (V3 x y _) = V2 x y
+
+
+-- |
+dropW :: V4 f -> V3 f
+dropW (V4 x y z _) = V3 x y z
+
+
+-- |
+dropZW :: V4 f -> V2 f
+dropZW (V4 x y _ _) = V2 x y
+
+
+-- | Creates a rotation matrix from an axis and an angle (in radians)
+axisRotation :: (Floating f, Epsilon f) => V3 f -> f -> M33 f
+axisRotation axis θ = fromQuaternion $ axisAngle axis θ
+
+
+-- | Finds the right texture coordinate for a vertex
+texcoord :: Fractional f => V3 f -> V2 f
+texcoord = fmap ((*0.5) . (+1) . signum) . dropZ
 
 -- Math ----------------------------------------------------------------------------------------------------------------------------------------------
 

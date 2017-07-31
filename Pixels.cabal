@@ -35,24 +35,27 @@ flag profiled
 
 
 library
-  ghc-options:         -Wall
+  ghc-options:         -w
 
-  default-extensions:  DuplicateRecordFields, FunctionalDependencies, MultiParamTypeClasses, FlexibleInstances
-  
+  default-extensions:    DuplicateRecordFields
+                       , FunctionalDependencies
+                       , MultiParamTypeClasses
+                       , FlexibleInstances
+                       , TypeSynonymInstances
+                       , TupleSections
+                       , DuplicateRecordFields
+
   hs-source-dirs:      src
-  exposed-modules:     Pixels.Render,
-                       Pixels.Render.Utils,
-                       Pixels.Interaction,
-                       Pixels.Types,
-                       Pixels.Lenses,
-                       Pixels.Walker,
-                       Pixels.Trinkets,
-                       Pixels.Load,
-                       Pixels.Canvas
-                       Pixels.Plugins
+  exposed-modules:       Pixels.Render
+                       , Pixels.Render.Utils
+                       , Pixels.Render.Typography
+                       , Pixels.Interaction
+                       , Pixels.Types
+                       , Pixels.Lenses
+                       , Pixels.Trinkets
+                       , Pixels.Plugins
 
   build-depends:         base            >= 4.5 && <= 5
-                       , reactive-banana
                        , JuicyPixels     == 3.2.*
                        , ghc
                        , ghc-paths
@@ -63,7 +66,7 @@ library
                        , GPipe-GLFW
                        , colour          >= 2.3.3 && < 2.4
                        , vector
-                       , text
+                       --, text
                        , GLFW-b
                        , bytestring
                        , linear
@@ -74,21 +77,19 @@ library
                        --, friday
                        , async
                        , monad-loops
-                       , storable-tuple
                        -- QuadTree
                        , containers
                        , lens
                        , aeson
                        , fsnotify
                        , wreq
-                       , OpenGL
                        , random
-                       , GLUtil
                        , filepath
                        , either
                        , ansi-terminal
                        -- monad-transformers
                        -- glob
+                       , cubist-sculptor
                        , Cartesian >= 0.5
                        , Leibniz
 
@@ -107,16 +108,7 @@ executable Pixels
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-                       -fwarn-tabs
-                       -fwarn-unused-imports
-                       -fwarn-name-shadowing
-                       -fwarn-incomplete-uni-patterns
-                       -fwarn-incomplete-patterns
-                       -fwarn-overlapping-patterns
-                       -fwarn-incomplete-record-updates
-                       -fwarn-missing-signatures
-                       -fwarn-monomorphism-restriction
-                       -fwarn-orphan
+                       -Wall
   -- TODO: Parallel compilation and larger stack
   -- ghci -j8 +RTS -A128m
   build-depends:       base,
@@ -133,6 +125,6 @@ test-suite Pixels-test
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
-source-repository head
-  type:     git
-  location: https://github.com/SwiftsNamesake/Pixels
+--source-repository head
+--  type:     git
+--  location: https://github.com/SwiftsNamesake/Pixels

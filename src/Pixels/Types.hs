@@ -8,155 +8,104 @@
 --
 
 -- TODO | - Break up type definitions into separate modules (?)
---        -
+--        - Logging
 
 -- SPEC | -
 --        -
 
 
 
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- GHC Pragmas
-------------------------------------------------------------------------------------------------------------------------------------------------------
+---GHC Pragams ---------------------------------------------------------------------------------------------------------------------------------------
+
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DuplicateRecordFields  #-}
--- {-# LANGUAGE OverloadedRecordFields #-} -- Some day...
 
+--- API ----------------------------------------------------------------------------------------------------------------------------------------------
 
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- API
-------------------------------------------------------------------------------------------------------------------------------------------------------
 module Pixels.Types where
 
+-- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- We'll need these
-------------------------------------------------------------------------------------------------------------------------------------------------------
 import qualified Data.Set as S
 import qualified Data.Map as M -- TODO: Use strict version (?)
 import           Data.Word
-import           Data.Colour
-
+-- import           Data.Colour
 -- import qualified Data.Array.Repa as R
 
 import Linear (V2(..), V3(..), M44)
-
-import Control.Lens
-
 import Control.Concurrent.MVar
 
-import qualified Graphics.Rendering.OpenGL as GL
+import Graphics.GPipe hiding (texture)
 
-import qualified Graphics.UI.GLFW as GLFW
+--- Types --------------------------------------------------------------------------------------------------------------------------------------------
 
+type AppContext = (WindowFormat RGBFloat Depth)
+type AppT os a  = ContextT (Window os RGBFloat Depth) os IO a
+-- AppVertexFormat
 
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
--- Types
-------------------------------------------------------------------------------------------------------------------------------------------------------
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
-
--- |
--- type Mesh  = (GL.PrimitiveMode, GL.BufferObject, GL.BufferObject, Int, Maybe [GL.TextureObject])
-data Mesh = Mesh { fPrimitive        :: GL.PrimitiveMode,
-                   fAttributeBuffers :: M.Map String (GL.BufferObject, Int),
-                   fNumVertices      :: Int,
-                   fTextures         :: [GL.TextureObject] }
-
-
-type Meshes = M.Map String Mesh
-type World  = () -- TODO: Remove this (?)
-type Images = M.Map String (Image (Pixel Word8))
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
-
-------------------------------------------------------------------------------------------------------------------------------------------------------
-
--- data LoggerT
+type VertexAttributes = (B4 Float, B2 Float)
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- |
-data AppState = AppState {
-  fAlive    :: Bool,
-  fWindow   :: GLFW.Window,
-  fDebug    :: Debug,
-  fInput    :: Input Float,
-  fPaths    :: Paths,
-  fSession  :: Session,
-  fSettings :: Settings,
-  fUi       :: UI,
-  fSize     :: V2 Float,
-  fGraphics :: Graphics
+data App os = App {
+  fCanvas :: Canvas os,
+  fRasterOptions :: (Side, ViewPort, DepthRange),
+  fShader :: CompiledShader os (WindowFormat RGBFloat Depth),
+  fUniforms :: UniformData os
 }
 
 
 -- |
-    -- let home = "C:/Users/Jonatan/Desktop/Haskell/projects/Pixels"
-    -- let shaderpath = home </> "assets/shaders"
-data Paths = Paths {
-  fHome     :: FilePath,
-  fAssets   :: FilePath,
-  fTextures :: FilePath
-} deriving (Show, Eq)
-
-
--- | Represents a single drawing surface
-data Canvas = Canvas { fTexture :: GL.TextureObject, fBuffer :: Image Word8 }
+data Canvas os = Canvas {
+  fSize     :: V2 Int,
+  fTexture  :: Texture2D os (Format RGBFloat),
+  fVertices :: Buffer os VertexAttributes
+}
 
 
 -- |
--- TODO: Serialisable session (resume work when app starts)
-data Session = Session {}
+data TextureEnvironment os = TextureEnvironment {
+  fTexture :: Texture2D os (Format RGBFloat),
+  fFilterMode :: SamplerFilter RGBFloat,
+  fEdgeMode   :: (EdgeMode2)
+  --, BorderColor (Format RGBFloat)),
+}
 
 
 -- |
--- data Tool = Tool 
--- data Pencil = Pencil
+data UniformBlock os a b = UniformBlock {
+  fBuffer :: Buffer os (Uniform b),
+  fValues :: [a], -- [HostFormat a],
+  fSize   :: Int
+}
 
 
 -- |
-data LogLevel = InfoLevel | WarningLevel | CriticalLevel deriving (Enum, Ord, Eq, Bounded, Read, Show)
-data Debug = Debug { fLogLevel :: LogLevel, fStartTime :: Double } deriving (Show, Eq, Read)
+data UniformData os = UniformData {
+  fMatrices :: UniformBlock os (M44 Float) (M44 (B Float)),
+  fScalars  :: UniformBlock os (Float)     (B   (Float)),
+  fVectors  :: UniformBlock os (V3 Float)  (B3  (Float))
+}
 
 
 -- |
-data Input f = Input { fMouse :: Mouse f, fKeyboard :: S.Set GLFW.Key, fCommand :: MVar String }
+data ShaderEnvironment os = ShaderEnvironment {
+  fRasterOptions  :: (Side, ViewPort, DepthRange),
+  fUniforms       :: UniformData os,
+  fPrimitiveArray :: PrimitiveArray Triangles VertexAttributes,
+  fTexture        :: TextureEnvironment os
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+-- data ActionStack = ActionStack
 
 
 -- |
-data Mouse f = Mouse { fPath :: [V2 f], fButtons :: S.Set GLFW.MouseButton }
+-- data Brush = Brush
 
-
--- |
-data Graphics = Graphics {
-  fProgram       :: GL.Program,
-  fCamera        :: Camera Float,
-  fMeshes        :: Meshes,
-  fResources     :: CPUResources,
-  fClearColour   :: GL.Color4 Float,
-  fMatModelview  :: M44 Float,
-  fMatProjection :: M44 Float
-} --, _viewport }
-
-
--- | Graphics resources that are stored in CPU memory
-data CPUResources = CPUResources { fImages :: Images }
-
-
--- |
-data UI = UI {}
--- data UI = UI { fView :: Aw.WebView }
-
--- |
-data Settings = Settings {}
-
-
--- |
-data Camera f = Camera { fPan :: V3 Float, fRotation :: V3 Float }
