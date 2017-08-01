@@ -4,14 +4,9 @@ packages:
 - location: C:/Users/Jonatan/Desktop/Haskell/modules/Cartesian
 - location: C:/Users/Jonatan/Desktop/Haskell/modules/Leibniz
 - location: C:/Users/Jonatan/Desktop/Haskell/modules/cubist-sculptor
-- location:
-    git: https://github.com/plredmond/GPipe-GLFW.git
-    commit: d7dddd2d01fa84d4de0639d298cc787da0607c1c
-  subdirs:
-    - GPipe-GLFW
-  extra-dep: true
 extra-deps:
 - GPipe-2.2.1
+- GPipe-GLFW-1.4.0
 - gl-0.8.0
 compiler-check: newer-minor
 arch: x86_64

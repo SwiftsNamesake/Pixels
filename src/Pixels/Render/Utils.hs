@@ -38,8 +38,8 @@ import Data.Word
 import Linear (V2(..))
 
 import qualified Data.Vector          as V
+import qualified Data.Vector.Storable as VS
 
-import Foreign.Storable.Tuple ()
 import Foreign.Ptr        as Ptr
 
 import           Data.Array.Repa ((:.)(..)) -- Weirdest syntax ever

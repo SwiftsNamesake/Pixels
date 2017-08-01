@@ -19,9 +19,9 @@
 
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE DuplicateRecordFields  #-}
+--{-# LANGUAGE FunctionalDependencies #-}
 
 --- API ----------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -38,12 +38,14 @@ import           Data.Word
 import Linear (V2(..), V3(..), M44)
 import Control.Concurrent.MVar
 
+import Graphics.GPipe.Context.GLFW (Handle)
 import Graphics.GPipe hiding (texture)
 
 --- Types --------------------------------------------------------------------------------------------------------------------------------------------
 
 type AppContext = (WindowFormat RGBFloat Depth)
-type AppT os a  = ContextT (Window os RGBFloat Depth) os IO a
+-- type AppT os a  = ContextT (Window os RGBFloat Depth) os IO a
+type AppT os a  = ContextT Handle os IO a
 -- AppVertexFormat
 
 type VertexAttributes = (B4 Float, B2 Float)
@@ -52,9 +54,10 @@ type VertexAttributes = (B4 Float, B2 Float)
 
 -- |
 data App os = App {
+  fWindow :: Window os RGBFloat Depth,
   fCanvas :: Canvas os,
   fRasterOptions :: (Side, ViewPort, DepthRange),
-  fShader :: CompiledShader os (WindowFormat RGBFloat Depth),
+  fShader :: CompiledShader os (ShaderEnvironment os), -- (WindowFormat RGBFloat Depth),
   fUniforms :: UniformData os
 }
 
@@ -71,7 +74,7 @@ data Canvas os = Canvas {
 data TextureEnvironment os = TextureEnvironment {
   fTexture :: Texture2D os (Format RGBFloat),
   fFilterMode :: SamplerFilter RGBFloat,
-  fEdgeMode   :: (EdgeMode2)
+  fEdgeMode   :: EdgeMode2
   --, BorderColor (Format RGBFloat)),
 }
 

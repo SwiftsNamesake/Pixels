@@ -18,7 +18,7 @@
 
 -- GHC Pragmas -----------------------------------------------------------------------------------------------------------------------------
 
-{-# LANGUAGE ViewPatterns           #-}
+--g{-# LANGUAGE ViewPatterns           #-}
 {-# LANGUAGE TupleSections          #-}
 {-# LANGUAGE InstanceSigs           #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
@@ -56,7 +56,7 @@ import Control.Monad
 -- import Graphics.Rendering.TrueType.STB as STB
 import           Graphics.GPipe hiding (texture, render)
 import qualified Graphics.GPipe as GPipe
-import qualified Graphics.GPipe.Context.GLFW        as Context
+import qualified Graphics.GPipe.Context.GLFW as Context
 -- import           Graphics.GPipe.Context.GLFW.Unsafe (GLFWWindow (..))
 
 import Geometry.Sculptor.Shapes hiding (Face)
@@ -65,33 +65,33 @@ import Leibniz.Constants (π)
 import Cartesian.Core (x,y,z)
 
 import Pixels.Types
+import Pixels.Lenses
 import Pixels.Trinkets
 
 -- Functions -------------------------------------------------------------------------------------------------------------------------------
 
 -- |
-render :: App os -> AppT os ()
-render app = do
-  GPipe.render $ do
-    clearContextColor (pure 0.74)
-    clearContextDepth 1.0
-    vertexArray <- newVertexArray (app^.canvas.vertices)
-    (app^.shader) $ ShaderEnvironment {
-                      fRasterOptions  = app^.rasterOptions,
-                      fUniforms       = app^.uniforms,
-                      fPrimitiveArray = toPrimitiveArray TriangleList vertexArray,
-                      fTexture        = TextureEnvironment {
-                                          fFilterMode = SamplerNearest, -- TODO: Snap to nearest instead
-                                          fEdgeMode   = (pure ClampToEdge), --, pure 1),
-                                          fTexture    = app^.canvas.texture }
-                    }
+render :: App os -> AppT os () -- ContextT ctx os m () -- _
+render app = GPipe.render $ do
+  clearWindowColor (app^.window) (pure 0.74)
+  clearWindowDepth (app^.window) 1.0
+  vertexArray <- newVertexArray (app^.canvas.vertices)
+  (app^.shader) $ ShaderEnvironment {
+                  fRasterOptions  = app^.rasterOptions,
+                  fUniforms       = app^.uniforms,
+                  fPrimitiveArray = toPrimitiveArray TriangleList vertexArray,
+                  fTexture        = TextureEnvironment {
+                                      fFilterMode = SamplerNearest, -- TODO: Snap to nearest instead
+                                      fEdgeMode   = pure ClampToEdge, --, pure 1),
+                                      fTexture    = app^.canvas.texture }
+                  }
 
 -- Geometry --------------------------------------------------------------------------------------------------------------------------------
 
 -- |
 newQuadXY :: V2 Float -> (V3 Float -> V2 Float) -> AppT os (Buffer os VertexAttributes)
 newQuadXY (V2 dx dy) texcoord = do
-  vertexBuffer :: Buffer os VertexAttributes <- newBuffer (length vertices)
+  vertexBuffer <- newBuffer (length vertices)
   writeBuffer vertexBuffer 0 vertices
   return vertexBuffer
   where
@@ -111,13 +111,13 @@ newCanvas size = do
 -- |
 -- TODO: Wrap in maybe (?)
 
-uMatrix :: Int -> Shader os (ContextFormat RGBFloat Depth) (ShaderEnvironment os) (UniformFormat (M44 (B Float)) a)
+uMatrix :: Int -> Shader os (ShaderEnvironment os) (V4 (UniformFormat (V4 (B Float)) x)) -- (M44 (B Float))
 uMatrix i = getUniform $ \sh -> (sh^.uniforms.matrices.buffer, i)
 
-uScalar :: Int -> Shader os (ContextFormat RGBFloat Depth) (ShaderEnvironment os) (UniformFormat (B Float) a)
+uScalar :: Int -> Shader os (ShaderEnvironment os) (S x Float) -- (B Float)
 uScalar i = getUniform $ \sh -> (sh^.uniforms.scalars.buffer, i)
 
-uVector :: Int -> Shader os (ContextFormat RGBFloat Depth) (ShaderEnvironment os) (UniformFormat (B3 Float) a)
+uVector :: Int -> Shader os (ShaderEnvironment os) (V3 (S x Float)) -- (B3 Float)
 uVector i = getUniform $ \sh -> (sh^.uniforms.vectors.buffer, i)
 
 
@@ -146,7 +146,7 @@ newUniformBuffer n v = do
 -- Shaders ---------------------------------------------------------------------------------------------------------------------------------
 
 -- |
-texturedShader :: Shader os (ContextFormat RGBFloat Depth) (ShaderEnvironment os) (FragmentStream (ColorSample F RGBFloat))
+texturedShader :: Shader os (ShaderEnvironment os) (FragmentStream (ColorSample F RGBFloat))
 texturedShader = do
   -- Read the uniforms
   [pv, mv] <- mapM uMatrix [0,1]
@@ -154,10 +154,10 @@ texturedShader = do
 
   -- One day, in the distant future, I will come to know what a primitive stream is
   primitiveStream <- toPrimitiveStream (^.primitiveArray)
-  fragmentStream <- rasterize (^.rasterOptions) (fmap (_1 %~ \pos -> pv !*! mv !* pos) primitiveStream)
+  fragmentStream <- rasterize (^.rasterOptions) ((_1 %~ \pos -> pv !*! mv !* pos) <$> primitiveStream)
   samp <- newSampler2D (\env -> (env^.texture.texture, env^.texture.filterMode, (pure ClampToEdge, 0)))
   let sampleTexture = sample2D samp SampleAuto Nothing Nothing
-  return $ fmap sampleTexture fragmentStream
+  return $ sampleTexture <$> fragmentStream
 
 -- Textures --------------------------------------------------------------------------------------------------------------------------------
 
@@ -178,7 +178,7 @@ save fn tex f = do
     (size:_) = texture2DSizes tex
     image (V2 dx dy) pixels = Juicy.Image { Juicy.imageWidth = dx, Juicy.imageHeight = dy, Juicy.imageData = VS.fromList pixels }
     pixel8    = floor . (*255)
-    convert c = let (V3 r g b) = fmap pixel8 c in [r, g, b]
+    convert c = let (V3 r g b) = pixel8 <$> c in [r, g, b]
 
 
 -- |
