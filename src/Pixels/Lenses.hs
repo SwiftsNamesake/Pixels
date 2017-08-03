@@ -26,7 +26,9 @@ module Pixels.Lenses where
 
 -- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
-import Control.Lens
+import Control.Lens (makeLensesWith, abbreviatedFields, ix, Simple, Lens, Traversal)
+import Linear       (M44)
+
 import Pixels.Types
 
 -- Definitions ---------------------------------------------------------------------------------------------------------------------------------------
@@ -35,5 +37,19 @@ makeLensesWith abbreviatedFields ''App
 makeLensesWith abbreviatedFields ''Canvas
 makeLensesWith abbreviatedFields ''UniformData
 makeLensesWith abbreviatedFields ''UniformBlock
+makeLensesWith abbreviatedFields ''Input
+makeLensesWith abbreviatedFields ''Mouse
 makeLensesWith abbreviatedFields ''ShaderEnvironment
 makeLensesWith abbreviatedFields ''TextureEnvironment
+makeLensesWith abbreviatedFields ''Easel
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+-- projection :: Simple Traversal (UniformBlockMatrix os) (M44 Float) -- Simple Traversal (UniformBlockMatrix os) (M44 Float)
+-- projection = (matrices :: Simple Lens (UniformBlockMatrix os)).(values).ix 0
+
+
+-- |
+--modelview :: Simple Traversal (UniformBlockMatrix os) (M44 Float) -- Simple Traversal (UniformBlockMatrix os) (M44 Float)
+-- modelview = matrices.values.ix 1

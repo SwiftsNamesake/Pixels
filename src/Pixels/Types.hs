@@ -9,6 +9,7 @@
 
 -- TODO | - Break up type definitions into separate modules (?)
 --        - Logging
+--        - Simplify types (via gpipe's own type machinery)
 
 -- SPEC | -
 --        -
@@ -29,8 +30,7 @@ module Pixels.Types where
 
 -- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
-import qualified Data.Set as S
-import qualified Data.Map as M -- TODO: Use strict version (?)
+import Data.Set (Set)
 import           Data.Word
 -- import           Data.Colour
 -- import qualified Data.Array.Repa as R
@@ -38,8 +38,11 @@ import           Data.Word
 import Linear (V2(..), V3(..), M44)
 import Control.Concurrent.MVar
 
-import Graphics.GPipe.Context.GLFW (Handle)
-import Graphics.GPipe hiding (texture)
+import qualified Codec.Picture.Types as Juicy
+
+import Graphics.GPipe.Context.GLFW       (Handle)
+import Graphics.GPipe
+import Graphics.GPipe.Context.GLFW.Input (Key(..), MouseButton(..))
 
 --- Types --------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -50,15 +53,45 @@ type AppT os a  = ContextT Handle os IO a
 
 type VertexAttributes = (B4 Float, B2 Float)
 
+type UniformBlockMatrix os = UniformBlock os (M44 Float) (M44 (B Float))
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+data AppConfig = AppConfig {
+ 
+}
+
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- |
 data App os = App {
   fWindow :: Window os RGBFloat Depth,
-  fCanvas :: Canvas os,
-  fRasterOptions :: (Side, ViewPort, DepthRange),
+  fEasel  :: Easel os, -- Canvas os,
   fShader :: CompiledShader os (ShaderEnvironment os), -- (WindowFormat RGBFloat Depth),
-  fUniforms :: UniformData os
+  fInput  :: Input,
+  fUniforms :: UniformData os,
+  fRasterOptions :: (Side, ViewPort, DepthRange)
+}
+
+
+-- |
+data Input = Input {
+  fMouse    :: Mouse,
+  fKeyboard :: Set Key
+} deriving (Show)
+
+
+-- |
+data Mouse = Mouse {
+  fCursor  :: V2 Double,
+  fButtons :: Set MouseButton
+} deriving (Show)
+
+
+-- |
+data Easel os = Easel {
+  fBrush  :: V3 Juicy.Pixel8,
+  fCanvas :: Canvas os
 }
 
 

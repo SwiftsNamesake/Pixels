@@ -1,11 +1,11 @@
 -- |
 -- Module      : Pixels.Render
--- Description : Rendering...
--- Copyright   : (c) Jonatan H Sundqvist, 2016
+-- Description : 
+-- Copyright   : (c) Jonatan Sundqvist, 2016
 -- License     : MIT
--- Maintainer  : Jonatan H Sundqvist
--- Stability   : experimental
--- Portability : Not Sure
+-- Maintainer  : Jonatan Sundqvist
+-- Stability   : 
+-- Portability : 
 --
 
 -- TODO | - Logging (ornate, sophisticated, colours, LOG, ERROR, etc.)
@@ -75,15 +75,15 @@ render :: App os -> AppT os () -- ContextT ctx os m () -- _
 render app = GPipe.render $ do
   clearWindowColor (app^.window) (pure 0.74)
   clearWindowDepth (app^.window) 1.0
-  vertexArray <- newVertexArray (app^.canvas.vertices)
+  vertexArray <- newVertexArray (app^.easel.canvas.vertices)
   (app^.shader) $ ShaderEnvironment {
-                  fRasterOptions  = app^.rasterOptions,
-                  fUniforms       = app^.uniforms,
-                  fPrimitiveArray = toPrimitiveArray TriangleList vertexArray,
-                  fTexture        = TextureEnvironment {
-                                      fFilterMode = SamplerNearest, -- TODO: Snap to nearest instead
-                                      fEdgeMode   = pure ClampToEdge, --, pure 1),
-                                      fTexture    = app^.canvas.texture }
+                    fRasterOptions  = app^.rasterOptions,
+                    fUniforms       = app^.uniforms,
+                    fPrimitiveArray = toPrimitiveArray TriangleList vertexArray,
+                    fTexture        = TextureEnvironment {
+                                        fFilterMode = SamplerNearest, -- TODO: Snap to nearest instead
+                                        fEdgeMode   = pure ClampToEdge, --, pure 1),
+                                        fTexture    = app^.easel.canvas.texture }
                   }
 
 -- Geometry --------------------------------------------------------------------------------------------------------------------------------
@@ -102,7 +102,7 @@ newQuadXY (V2 dx dy) texcoord = do
 
 newCanvas :: V2 Int -> AppT os (Canvas os)
 newCanvas size = do
-  tex <- new size (\x y -> V3 30 20 240)
+  tex <- new size (\_ -> V3 30 20 240)
   vs  <- newQuadXY (fmap fromIntegral size) texcoord
   return $ Canvas { fSize = size, fTexture = tex, fVertices = vs }
 
@@ -192,8 +192,8 @@ load fn = runEitherT $ do
 
 
 -- |
-new :: V2 Int -> (Int -> Int -> V3 Juicy.Pixel8) -> AppT os (Texture2D os (Format RGBFloat))
-new size@(V2 dx dy) f = fromPixels size [f x y | x <- [0..dx-1], y <- [0..dy-1]]
+new :: V2 Int -> (V2 Int -> V3 Juicy.Pixel8) -> AppT os (Texture2D os (Format RGBFloat))
+new size@(V2 dx dy) f = fromPixels size [f (V2 x y) | x <- [0..dx-1], y <- [0..dy-1]]
 
 
 -- |

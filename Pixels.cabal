@@ -35,7 +35,7 @@ flag profiled
 
 
 library
-  ghc-options:         -w
+  ghc-options:         -Wall
 
   default-extensions:    DuplicateRecordFields
                        , FunctionalDependencies
@@ -46,13 +46,16 @@ library
                        , DuplicateRecordFields
 
   hs-source-dirs:      src
-  exposed-modules:       Pixels.Render
+  exposed-modules:       Pixels.Types
+                       , Pixels.Render
                        , Pixels.Render.Utils
                        , Pixels.Render.Typography
+                       , Pixels.Persistence
                        , Pixels.Interaction
-                       , Pixels.Types
                        , Pixels.Lenses
                        , Pixels.Trinkets
+                       , Pixels.Load
+                       --, Pixels.Commands
                        --, Pixels.Plugins
 
   build-depends:         base            >= 4.5 && <= 5
