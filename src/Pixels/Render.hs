@@ -76,10 +76,13 @@ render app = GPipe.render $ do
   clearWindowColor (app^.window) (pure 0.74)
   clearWindowDepth (app^.window) 1.0
   vertexArray <- newVertexArray (app^.easel.canvas.vertices)
+  pointArray  <- newVertexArray (app^.easel.brush.positionBuffer)
   (app^.shader) $ ShaderEnvironment {
                     fRasterOptions  = app^.rasterOptions,
                     fUniforms       = app^.uniforms,
-                    fPrimitiveArray = toPrimitiveArray TriangleList vertexArray,
+                    fAttributes     = AttributeData {
+                                        fCanvas = toPrimitiveArray TriangleList vertexArray,
+                                        fPoints = toPrimitiveArray PointList    pointArray },
                     fTexture        = TextureEnvironment {
                                         fFilterMode = SamplerNearest, -- TODO: Snap to nearest instead
                                         fEdgeMode   = pure ClampToEdge, --, pure 1),
@@ -89,27 +92,40 @@ render app = GPipe.render $ do
 -- Geometry --------------------------------------------------------------------------------------------------------------------------------
 
 -- |
+newAttributeBuffer :: BufferFormat b => [HostFormat b] -> AppT os (Buffer os b)
+newAttributeBuffer d = do
+  buffer <- newBuffer (length d)
+  writeBuffer buffer 0 d
+  return buffer
+
+
+-- |
 newQuadXY :: V2 Float -> (V3 Float -> V2 Float) -> AppT os (Buffer os VertexAttributes)
-newQuadXY (V2 dx dy) texcoord = do
-  vertexBuffer <- newBuffer (length vertices)
-  writeBuffer vertexBuffer 0 vertices
-  return vertexBuffer
+newQuadXY (V2 dx dy) texcoord = newAttributeBuffer vertices
   where
     makeVertex v = (to4D 1 v, texcoord v)
     vertices = map makeVertex (concat . triangles $ planeXY V3 dx dy)
 
 --------------------------------------------------------------------------------------------------------------------------------------------
 
-newCanvas :: V2 Int -> AppT os (Canvas os)
-newCanvas size = do
-  tex <- new size (\_ -> V3 30 20 240)
+-- |
+newBrush :: V2 Int -> V3 Juicy.Pixel8 -> AppT os (Brush os)
+newBrush (V2 x y) fill = do
+  bp  <- newAttributeBuffer [(fromIntegral <$> V4 x y 0 1, fromIntegral <$> fill)]
+  return $ Brush { fPositionBuffer = bp, fColour = fill }
+
+
+-- |
+newCanvas :: V2 Int -> V3 Juicy.Pixel8 -> AppT os (Canvas os)
+newCanvas size fill = do
+  tex <- new size (const fill)
   vs  <- newQuadXY (fmap fromIntegral size) texcoord
-  return $ Canvas { fSize = size, fTexture = tex, fVertices = vs }
+  return $ Canvas { fSize = size, fTexture = tex, fVertices = vs, fColour = fill }
 
 -- Uniforms --------------------------------------------------------------------------------------------------------------------------------
 
 -- |
--- TODO: Wrap in maybe (?)
+-- TODO | - Wrap in maybe (?)
 
 uMatrix :: Int -> Shader os (ShaderEnvironment os) (V4 (UniformFormat (V4 (B Float)) x)) -- (M44 (B Float))
 uMatrix i = getUniform $ \sh -> (sh^.uniforms.matrices.buffer, i)
@@ -122,6 +138,7 @@ uVector i = getUniform $ \sh -> (sh^.uniforms.vectors.buffer, i)
 
 
 -- |
+-- TODO | - Make this less frail
 newUniforms :: AppT os (UniformData os)
 newUniforms = do
   scalars'  <- newUniformBuffer 3 (0)
@@ -150,14 +167,23 @@ texturedShader :: Shader os (ShaderEnvironment os) (FragmentStream (ColorSample 
 texturedShader = do
   -- Read the uniforms
   [pv, mv] <- mapM uMatrix [0,1]
-  mouse <- uVector 0
 
   -- One day, in the distant future, I will come to know what a primitive stream is
-  primitiveStream <- toPrimitiveStream (^.primitiveArray)
+  primitiveStream <- toPrimitiveStream (^.attributes.canvas)
   fragmentStream <- rasterize (^.rasterOptions) ((_1 %~ \pos -> pv !*! mv !* pos) <$> primitiveStream)
   samp <- newSampler2D (\env -> (env^.texture.texture, env^.texture.filterMode, (pure ClampToEdge, 0)))
   let sampleTexture = sample2D samp SampleAuto Nothing Nothing
   return $ sampleTexture <$> fragmentStream
+
+
+-- |
+-- colorShader :: Shader os (ShaderEnvironment os) (FragmentStream (ColorSample F RGBFloat))
+-- colorShader = do
+  [pv, mv] <- mapM uMatrix [0,1]
+
+  -- One day, in the distant future, I will come to know what a primitive stream is
+  primitiveStream <- toPrimitiveStream (^.attributes.points)
+  rasterize (^.rasterOptions) ((_1 %~ \pos -> pv !*! mv !* pos) <$> primitiveStream)
 
 -- Textures --------------------------------------------------------------------------------------------------------------------------------
 
@@ -169,10 +195,12 @@ pixel xs _ _ pix = let Juicy.PixelRGB8 r g b = Juicy.convertPixel pix in V3 r g 
 
 
 -- |
+-- TODO | - Image becomes mirrored 
+--        -
 -- saves :: FilePath -> Texture2D os (HostFormat (BufferColor (Color a (ColorElement a)) a)) -> (a -> V3 Float) -> AppT os ()
 save :: FilePath -> Texture2D os (Format RGBFloat) -> (V3 Float -> V3 Float) -> AppT os ()
 save fn tex f = do
-  pixels <- readTexture2D tex 0 (V2 0 0) size (\ps c -> return $ convert (f c) ++ ps) []
+  pixels <- readTexture2D tex 0 (V2 0 0) size (\ps c -> return $ ps ++ convert (f c)) []
   liftIO $ Juicy.savePngImage fn (Juicy.ImageRGB8 $ image size pixels)
   where
     (size:_) = texture2DSizes tex

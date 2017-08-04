@@ -10,6 +10,7 @@
 -- TODO | - Break up type definitions into separate modules (?)
 --        - Logging
 --        - Simplify types (via gpipe's own type machinery)
+--        - Organise data better (eg. separate logic from GPU resources)
 
 -- SPEC | -
 --        -
@@ -36,7 +37,7 @@ import           Data.Word
 -- import qualified Data.Array.Repa as R
 
 import Linear (V2(..), V3(..), M44)
-import Control.Concurrent.MVar
+import Control.Concurrent.STM
 
 import qualified Codec.Picture.Types as Juicy
 
@@ -58,52 +59,75 @@ type UniformBlockMatrix os = UniformBlock os (M44 Float) (M44 (B Float))
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 data AppConfig = AppConfig {
- 
+  fCanvasSize   :: V2 Int,
+  fCanvasColour :: V3 Juicy.Pixel8,
+  fWindowSize   :: V2 Int,
+  fBrushColour  :: V3 Juicy.Pixel8
 }
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
--- |
+-- | 
 data App os = App {
   fWindow :: Window os RGBFloat Depth,
   fEasel  :: Easel os, -- Canvas os,
   fShader :: CompiledShader os (ShaderEnvironment os), -- (WindowFormat RGBFloat Depth),
   fInput  :: Input,
-  fUniforms :: UniformData os,
+  fUndoQueue :: [UndoAction],
+  fUniforms  :: UniformData os,
   fRasterOptions :: (Side, ViewPort, DepthRange)
 }
 
 
--- |
+-- | 
 data Input = Input {
   fMouse    :: Mouse,
   fKeyboard :: Set Key
 } deriving (Show)
 
 
--- |
+-- | Coming soon...
+-- TODO | - Unify events (?)
+data InputChannels = InputChannels {
+  fMouseMotion  :: TChan (V2 Double),
+  fMousePresses :: TChan (MouseButton),
+  fKeyPresses   :: TChan (Key, Bool),
+  fScrolls      :: TChan (Double, Double),
+  fFileDrops    :: TChan [String]
+}
+
+
+-- | 
 data Mouse = Mouse {
-  fCursor  :: V2 Double,
+  fCursor  :: V2 Float,
   fButtons :: Set MouseButton
 } deriving (Show)
 
 
--- |
+-- | 
 data Easel os = Easel {
-  fBrush  :: V3 Juicy.Pixel8,
+  fBrush  :: Brush os,
   fCanvas :: Canvas os
 }
 
 
--- |
-data Canvas os = Canvas {
-  fSize     :: V2 Int,
-  fTexture  :: Texture2D os (Format RGBFloat),
-  fVertices :: Buffer os VertexAttributes
+-- | 
+data Brush os = Brush {
+  fColour         :: V3 Juicy.Pixel8,
+  fPositionBuffer :: Buffer os (B4 Float)
 }
 
 
--- |
+-- | 
+data Canvas os = Canvas {
+  fSize     :: V2 Int,
+  fColour   :: V3 Juicy.Pixel8,
+  fTexture  :: Texture2D os (Format RGBFloat),
+  fVertices :: Buffer os VertexAttributes -- The shape of the canvas itself
+}
+
+
+-- | 
 data TextureEnvironment os = TextureEnvironment {
   fTexture :: Texture2D os (Format RGBFloat),
   fFilterMode :: SamplerFilter RGBFloat,
@@ -112,7 +136,7 @@ data TextureEnvironment os = TextureEnvironment {
 }
 
 
--- |
+-- | 
 data UniformBlock os a b = UniformBlock {
   fBuffer :: Buffer os (Uniform b),
   fValues :: [a], -- [HostFormat a],
@@ -120,7 +144,7 @@ data UniformBlock os a b = UniformBlock {
 }
 
 
--- |
+-- | 
 data UniformData os = UniformData {
   fMatrices :: UniformBlock os (M44 Float) (M44 (B Float)),
   fScalars  :: UniformBlock os (Float)     (B   (Float)),
@@ -128,20 +152,35 @@ data UniformData os = UniformData {
 }
 
 
--- |
+-- | 
+-- TODO | - How do we 'merge' the two versions of AttributeData?
+data AttributeData os = AttributeData {
+  fCanvas :: PrimitiveArray Triangles VertexAttributes,
+  fPoints :: PrimitiveArray Points    (B4 Float)
+}
+
+
+-- | 
 data ShaderEnvironment os = ShaderEnvironment {
   fRasterOptions  :: (Side, ViewPort, DepthRange),
   fUniforms       :: UniformData os,
-  fPrimitiveArray :: PrimitiveArray Triangles VertexAttributes,
+  fAttributes     :: AttributeData os,
   fTexture        :: TextureEnvironment os
 }
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
--- |
--- data ActionStack = ActionStack
+-- | 
+-- data ActionStack = ActionStack deriving (Show, Eq)
 
 
--- |
+-- | 
+-- data UIOverlay = UIOverlay {}
+
+
+data UndoAction = UndoAction deriving (Show, Eq)
+
+
+-- | 
 -- data Brush = Brush
 

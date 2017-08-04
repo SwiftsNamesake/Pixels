@@ -26,15 +26,30 @@ module Pixels.Lenses where
 
 -- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
-import Control.Lens (makeLensesWith, abbreviatedFields, ix, Simple, Lens, Traversal)
-import Linear       (M44)
+-- import Control.Monad (forM_, forM, mapM_, mapM)
+import Control.Lens  (makeLensesWith, abbreviatedFields, ix, Simple, Lens, Traversal)
+import Linear        (M44)
 
 import Pixels.Types
 
 -- Definitions ---------------------------------------------------------------------------------------------------------------------------------------
 
+-- mapM_ (makeLensesWith abbreviatedFields) [''App,
+--                                          ''Canvas,
+--                                          ''Brush,
+--                                          ''UniformData,
+--                                          ''UniformBlock,
+--                                          ''Input,
+--                                          ''Mouse,
+--                                          ''ShaderEnvironment,
+--                                          ''TextureEnvironment,
+--                                          ''Easel,
+--                                          ''AppConfig]
+
 makeLensesWith abbreviatedFields ''App
 makeLensesWith abbreviatedFields ''Canvas
+makeLensesWith abbreviatedFields ''Brush
+makeLensesWith abbreviatedFields ''AttributeData
 makeLensesWith abbreviatedFields ''UniformData
 makeLensesWith abbreviatedFields ''UniformBlock
 makeLensesWith abbreviatedFields ''Input
@@ -42,6 +57,7 @@ makeLensesWith abbreviatedFields ''Mouse
 makeLensesWith abbreviatedFields ''ShaderEnvironment
 makeLensesWith abbreviatedFields ''TextureEnvironment
 makeLensesWith abbreviatedFields ''Easel
+makeLensesWith abbreviatedFields ''AppConfig
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 

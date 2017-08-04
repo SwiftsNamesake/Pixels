@@ -67,10 +67,10 @@ library
                        , FontyFruity
                        , GPipe
                        , GPipe-GLFW
+                       , GLFW-b
                        , colour          >= 2.3.3 && < 2.4
                        , vector
-                       --, text
-                       , GLFW-b
+                       , text
                        , bytestring
                        , linear
                        , attoparsec
@@ -82,8 +82,9 @@ library
                        , monad-loops
                        -- QuadTree
                        , containers
-                       , lens
+                       , stm
                        , aeson
+                       , lens
                        , fsnotify
                        , wreq
                        , random
