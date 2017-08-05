@@ -62,7 +62,8 @@ data AppConfig = AppConfig {
   fCanvasSize   :: V2 Int,
   fCanvasColour :: V3 Juicy.Pixel8,
   fWindowSize   :: V2 Int,
-  fBrushColour  :: V3 Juicy.Pixel8
+  fBrushColour  :: V3 Juicy.Pixel8,
+  fEaselPalette :: [V3 Juicy.Pixel8]
 }
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -82,19 +83,29 @@ data App os = App {
 -- | 
 data Input = Input {
   fMouse    :: Mouse,
-  fKeyboard :: Set Key
-} deriving (Show)
+  fKeyboard :: Set Key,
+  fInputChannel :: InputChannel
+} -- deriving (Show)
 
 
 -- | Coming soon...
 -- TODO | - Unify events (?)
-data InputChannels = InputChannels {
-  fMouseMotion  :: TChan (V2 Double),
-  fMousePresses :: TChan (MouseButton),
-  fKeyPresses   :: TChan (Key, Bool),
-  fScrolls      :: TChan (Double, Double),
-  fFileDrops    :: TChan [String]
-}
+-- newtype InputChannel = InputChannel (TChan AppEvent)
+type InputChannel = (TChan AppEvent)
+
+
+-- |
+data AppEvent =   MouseMotion (V2 Double)
+                | MouseDown   MouseButton
+                | MouseUp     MouseButton
+                | MouseScroll (V2 Double)
+                | KeyDown     Key
+                | KeyUp       Key
+                | KeyRepeat   Key
+                | FileDrop    [String]
+                | FileChange  () -- TODO: Fix
+                | WindowClose
+                deriving (Eq, Show)
 
 
 -- | 
@@ -106,15 +117,16 @@ data Mouse = Mouse {
 
 -- | 
 data Easel os = Easel {
-  fBrush  :: Brush os,
-  fCanvas :: Canvas os
+  fBrush   :: Brush os,
+  fCanvas  :: Canvas os,
+  fPalette :: [V3 Juicy.Pixel8]
 }
 
 
 -- | 
 data Brush os = Brush {
   fColour         :: V3 Juicy.Pixel8,
-  fPositionBuffer :: Buffer os (B4 Float)
+  fPositionBuffer :: Buffer os (B4 Float, B3 Float)
 }
 
 
@@ -156,7 +168,7 @@ data UniformData os = UniformData {
 -- TODO | - How do we 'merge' the two versions of AttributeData?
 data AttributeData os = AttributeData {
   fCanvas :: PrimitiveArray Triangles VertexAttributes,
-  fPoints :: PrimitiveArray Points    (B4 Float)
+  fPoints :: PrimitiveArray Points    (B4 Float, B3 Float)
 }
 
 

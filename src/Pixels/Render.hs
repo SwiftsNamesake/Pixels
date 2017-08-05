@@ -177,8 +177,8 @@ texturedShader = do
 
 
 -- |
--- colorShader :: Shader os (ShaderEnvironment os) (FragmentStream (ColorSample F RGBFloat))
--- colorShader = do
+colorShader :: Shader os (ShaderEnvironment os) (FragmentStream (ColorSample F RGBFloat))
+colorShader = do
   [pv, mv] <- mapM uMatrix [0,1]
 
   -- One day, in the distant future, I will come to know what a primitive stream is

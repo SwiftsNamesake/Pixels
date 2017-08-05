@@ -41,6 +41,7 @@ import qualified Data.ByteString as B
 import           Data.Word
 import           Data.Function (on)
 import           Data.Bits
+import           Data.Time
 import           Data.Maybe (fromMaybe, listToMaybe)
 import           Data.IORef
 import           Data.Foldable
@@ -59,7 +60,7 @@ import Text.Read (readMaybe, readEither)
 
 import Linear (V2(..), V3(..), V4(..))
 
-import System.FilePath  ((</>), takeExtension, dropExtension, takeFileName) --
+import System.FilePath  ((</>), (<.>), takeExtension, dropExtension, takeFileName, normalise, isValid)
 import System.Directory (getDirectoryContents)
 import System.FSNotify
 import System.Console.ANSI as ANSI
@@ -68,12 +69,13 @@ import           Control.Monad.Trans.Class as St
 import           Control.Monad.IO.Class (liftIO)
 import qualified Control.Monad.Trans.State as St
 import           Control.Monad.Trans.Either
-import           Control.Lens hiding (argument)
+import           Control.Lens hiding (argument, (<.>))
 import           Control.Monad
 import           Control.Monad.Loops (whileM)
 import           Control.Applicative ((<$>), (<*>), liftA2)
 import           Control.Concurrent (threadDelay, forkIO)
 import           Control.Concurrent.MVar
+import           Control.Concurrent.STM
 import           Control.Exception (finally, catch, displayException)
 
 import           Graphics.GPipe hiding (texture)
@@ -124,31 +126,44 @@ root = "C:/Users/Jonatan/Desktop/Haskell/projects/Pixels"
 
 
 -- |
-initialInput :: Input
-initialInput = Input {
-                 fMouse = Mouse {
-                   fCursor  = V2 0 0,
-                   fButtons = S.empty },
-                 fKeyboard = S.empty }
+initialInput :: InputChannel -> Input
+initialInput ch = Input {
+                    fMouse = Mouse {
+                      fCursor  = V2 0 0,
+                      fButtons = S.empty },
+                    fKeyboard  = S.empty,
+                    fInputChannel = ch }
+
+-- App actions ---------------------------------------------------------------------------------------------------------------------------------------
+
+-- These should eventually be moved to some other module
+
+-- | 
+clearCanvas :: App os -> AppT os (App os)
+clearCanvas app = do
+  -- TODO: Clear texture instead of recreating
+  -- clearImageColor
+  blank <- Render.new (app^.easel.canvas.size) (\_ -> app^.easel.canvas.colour)
+  return $ app & easel.canvas.texture .~ blank
 
 
 -- |
-keyDown :: Window os RGBFloat Depth -> Key -> AppT os Bool
-keyDown win k = maybe False (== KeyState'Pressed) <$> GLFW.getKey win k
+quitApplication :: App os -> AppT os (App os)
+quitApplication app = do
+  setWindowShouldClose (app^.window) True
+  return app
 
 
 -- |
-buttonDown :: Window os RGBFloat Depth -> MouseButton -> AppT os Bool
-buttonDown win b = maybe False (== MouseButtonState'Pressed) <$> GLFW.getMouseButton win b
-
-
--- | Get the position of the mouse, if the given mouse button is being pressed
--- TODO | - Rename (?)
---        - Refactor
-mousepressAt :: App os -> MouseButton -> Maybe (V2 Float)
-mousepressAt app button
-  | app^.input.mouse.buttons.contains button = Just $ app^.input.mouse.cursor
-  | otherwise                                = Nothing
+-- TODO | - Choose path properly
+--        -
+saveCanvas :: App os -> AppT os (App os)
+saveCanvas app = do
+  now <- normalise . formatTime defaultTimeLocale "%s" <$> liftIO getCurrentTime
+  if isValid now
+    then Render.save (root </> "assets" </> now <.> "png") (app^.easel.canvas.texture) id
+    else liftIO . putStrLn $ "Invalid file name: " ++ (root </> "assets" </> now <.> "png")
+  return app
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -181,11 +196,28 @@ main = runContextT GLFW.defaultHandleConfig $ do
     -- ContextColorOption NoBlending (pure True :: ColorMask RGBFloat)
 
   -- Events
-  GLFW.setDropCallback   win (Just $ \paths -> print paths)
-  GLFW.setScrollCallback win (Just $ \sx sy -> printf "%.02f %.02f\n" sx sy)
-  -- setCursorPosCallback :: MonadIO m => Window os c ds -> Maybe (Double -> Double -> IO ()) -> ContextT Handle os m (Maybe
-  -- setKeyCallback :: MonadIO m => Window os c ds -> Maybe (Key -> Int -> KeyState -> ModifierKeys -> IO ()) -> ContextT Handle os m (Maybe ())
-  -- setMouseButtonCallback :: MonadIO m => Window os c ds -> Maybe (MouseButton -> MouseButtonState -> ModifierKeys -> IO ())
+  channel <- liftIO newTChanIO
+
+  -- TODO | - KeyDown
+  --        - KeyUp
+  --        - FileChange
+
+  -- TODO | - Add modifiers, scancode (?)
+  let makeMouseEvent b MouseButtonState'Pressed  _ = MouseDown b
+      makeMouseEvent b MouseButtonState'Released _ = MouseUp b
+
+      makeKeyEvent k _ (KeyState'Pressed)   mods = KeyDown k
+      makeKeyEvent k _ (KeyState'Released)  mods = KeyUp k
+      makeKeyEvent k _ (KeyState'Repeating) mods = KeyRepeat k
+      
+      putEvent :: AppEvent -> IO ()
+      putEvent = liftIO . atomically . writeTChan channel
+
+  GLFW.setDropCallback        win (Just $ \paths            -> putEvent $ FileDrop paths)
+  GLFW.setScrollCallback      win (Just $ \sx sy            -> putEvent $ MouseScroll (V2 sx sy))
+  GLFW.setCursorPosCallback   win (Just $ \mx my            -> putEvent $ MouseMotion (V2 mx my))
+  GLFW.setMouseButtonCallback win (Just $ \b bstate mods    -> putEvent $ makeMouseEvent b bstate mods)
+  GLFW.setKeyCallback         win (Just $ \k sc kstate mods -> putEvent $ makeKeyEvent k sc kstate mods)
   -- setCursorEnterCallback :: MonadIO m => Window os c ds -> Maybe (CursorState -> IO ()) -> ContextT Handle os m (Maybe ())
 
   -- setClipboardString 
@@ -199,21 +231,42 @@ main = runContextT GLFW.defaultHandleConfig $ do
     fRasterOptions = (FrontAndBack, ViewPort (V2 0 0) (config^.windowSize), DepthRange 0 1),
     fShader        = shade,
     fUniforms      = us,
-    fEasel         = Easel { fCanvas = cvs, fBrush = br },
+    fEasel         = Easel {
+                       fCanvas  = cvs,
+                       fBrush   = br,
+                       fPalette = config^.easelPalette },
     fWindow        = win,
-    fInput         = initialInput
+    fInput         = initialInput channel -- (InputChannel channel)
   }
 
 
 -- |
-updateInput :: App os -> AppT os Input
-updateInput app = do
-  cursor   <- fmap realToFrac . uncurry V2 . fromMaybe (0,0) <$> GLFW.getCursorPos (app^.window)
-  keys     <- S.fromList <$> filterM (keyDown    $ app^.window) [Key'Space .. Key'Menu] --[toEnum 0 ..]
-  mbuttons <- S.fromList <$> filterM (buttonDown $ app^.window) [toEnum 0 ..]
+onkeydown :: App os -> Key -> AppT os (App os)
+onkeydown app k = case k of
+  Key'Space  -> clearCanvas app
+  Key'Escape -> quitApplication app
+  Key'S      -> saveCanvas app
+  _          -> return app
+
+
+-- |
+onevent :: App os -> AppT os (App os)
+onevent app e = _
+
+
+-- |
+processEvents :: App os -> AppT os Input
+processEvents app = do
+  -- cursor   <- fmap realToFrac . uncurry V2 . fromMaybe (0,0) <$> GLFW.getCursorPos (app^.window)
+  -- keys     <- S.fromList <$> filterM (keyDown    $ app^.window) [Key'Space .. Key'Menu] --[toEnum 0 ..]
+  -- mbuttons <- S.fromList <$> filterM (buttonDown $ app^.window) [toEnum 0 ..]
+
+  -- whileM (/= Nothing) (tryReadTChan $ app^.input.inputChannel)
+  liftIO $ (atomically . tryReadTChan $ app^.input.inputChannel) >>= print
   return $ Input {
     fMouse    = Mouse { fCursor = cursor, fButtons = mbuttons },
-    fKeyboard = keys
+    fKeyboard = keys,
+    fInputChannel = app^.input.inputChannel
   }
 
 
@@ -221,27 +274,15 @@ updateInput app = do
 tick :: App os -> AppT os (App os)
 tick app' = do
   -- Read input
-  -- TODO: No hard-coded constants (I'm looking at YOU, client size!)
-  input' <- updateInput app'
+  input' <- processEvents app'
 
   -- New app state
   app <- flip St.execStateT app' $ do
     app <- St.get
     input .= input'
     uniforms.vectors.values.ix 0 .= (realToFrac <$> to3D 0 (app^.input.mouse.cursor))
-    uniforms.projection .= (let (V2 x' y') = (*0.5) . fromIntegral <$> (app^.easel.canvas.size) in ortho (-x') (x') (-y') (y') 0 1)
-    uniforms.modelview  .= (identity & translation.z .~ 0)
-
-    when (app^.input.keyboard.contains Key'Space) $ do
-      -- TODO: Clear texture instead of recreating
-      -- clearImageColor
-      blank <- lift $ Render.new (app^.easel.canvas.size) (\_ -> app^.easel.canvas.colour)
-      easel.canvas.texture .= blank
-
-  forM (toList $ app^.input.keyboard) $ \k -> case k of
-    Key'Escape -> void $ setWindowShouldClose (app^.window) True
-    Key'S      -> void $ Render.save (root </> "assets/canvas.png") (app^.easel.canvas.texture) id
-    _          -> pass
+    uniforms.projection          .= (let (V2 x' y') = (*0.5) . fromIntegral <$> (app^.easel.canvas.size) in ortho (-x') (x') (-y') (y') 0 1)
+    uniforms.modelview           .= (identity & translation.z .~ 0)
 
   -- Write uniforms
   writeBuffer (app^.uniforms.matrices.buffer) 0 (app^.uniforms.matrices.values)
@@ -249,7 +290,10 @@ tick app' = do
   writeBuffer (app^.uniforms.scalars.buffer)  0 (app^.uniforms.scalars.values)
 
   -- Write attributes
-  writeBuffer (app^.easel.brush.positionBuffer) 0 ([let (V2 mx my) = app^.input.mouse.cursor in V4 mx my 0 1 :: V4 Float] :: [HostFormat (B4 Float)])
+  writeBuffer (app^.easel.brush.positionBuffer) 0 [let (V2 x y) = app^.input.mouse.cursor
+                                                       pos      = screenToNormalised app !* (V4 x y 0 1)
+                                                       pixel    = fromIntegral <$> head (app^.easel.palette)
+                                                   in (pos, V3 0 0 0)]
 
   -- Paint the canvas
   -- TODO: Apply transform
