@@ -93,7 +93,6 @@ library
                        , either
                        , ansi-terminal
                        -- monad-transformers
-                       -- glob
                        , cubist-sculptor
                        , Cartesian >= 0.5
                        , Leibniz

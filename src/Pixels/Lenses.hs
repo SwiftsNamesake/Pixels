@@ -27,8 +27,8 @@ module Pixels.Lenses where
 -- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
 -- import Control.Monad (forM_, forM, mapM_, mapM)
-import Control.Lens  (makeLensesWith, abbreviatedFields, ix, Simple, Lens, Traversal)
-import Linear        (M44)
+import Control.Lens (makeLensesWith, abbreviatedFields, ix, Simple, Lens, Traversal, Identity, IxValue)
+import Linear       (M44)
 
 import Pixels.Types
 
@@ -60,6 +60,15 @@ makeLensesWith abbreviatedFields ''Easel
 makeLensesWith abbreviatedFields ''AppConfig
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+projection :: (IxValue [M44 Float] -> Identity (IxValue [M44 Float])) -> UniformData os -> Identity (UniformData os)
+projection = matrices.values.ix 0
+
+
+-- |
+modelview :: (IxValue [M44 Float] -> Identity (IxValue [M44 Float])) -> UniformData os -> Identity (UniformData os)
+modelview = matrices.values.ix 1
 
 -- |
 -- projection :: Simple Traversal (UniformBlockMatrix os) (M44 Float) -- Simple Traversal (UniformBlockMatrix os) (M44 Float)

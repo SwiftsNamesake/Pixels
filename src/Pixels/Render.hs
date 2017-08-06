@@ -68,7 +68,7 @@ import Pixels.Types
 import Pixels.Lenses
 import Pixels.Trinkets
 
--- Functions -------------------------------------------------------------------------------------------------------------------------------
+-- Definitions -----------------------------------------------------------------------------------------------------------------------------
 
 -- |
 render :: App os -> AppT os () -- ContextT ctx os m () -- _
@@ -127,38 +127,44 @@ newCanvas size fill = do
 -- |
 -- TODO | - Wrap in maybe (?)
 
-uMatrix :: Int -> Shader os (ShaderEnvironment os) (V4 (UniformFormat (V4 (B Float)) x)) -- (M44 (B Float))
-uMatrix i = getUniform $ \sh -> (sh^.uniforms.matrices.buffer, i)
+readMatrix :: Int -> Shader os (ShaderEnvironment os) (V4 (UniformFormat (V4 (B Float)) x)) -- (M44 (B Float))
+readMatrix i = getUniform $ \sh -> (sh^.uniforms.matrices.buffer, i)
 
-uScalar :: Int -> Shader os (ShaderEnvironment os) (S x Float) -- (B Float)
-uScalar i = getUniform $ \sh -> (sh^.uniforms.scalars.buffer, i)
+readScalar :: Int -> Shader os (ShaderEnvironment os) (S x Float) -- (B Float)
+readScalar i = getUniform $ \sh -> (sh^.uniforms.scalars.buffer, i)
 
-uVector :: Int -> Shader os (ShaderEnvironment os) (V3 (S x Float)) -- (B3 Float)
-uVector i = getUniform $ \sh -> (sh^.uniforms.vectors.buffer, i)
+readVector :: Int -> Shader os (ShaderEnvironment os) (V3 (S x Float)) -- (B3 Float)
+readVector i = getUniform $ \sh -> (sh^.uniforms.vectors.buffer, i)
+
+
+-- |
+newUniformBuffer :: BufferFormat a => [HostFormat a] -> AppT os (UniformBlock os (HostFormat a) a)
+newUniformBuffer vs = do
+  b <- newBuffer (length vs)
+  writeBuffer b 0 vs
+  return $ UniformBlock { fBuffer = b, fSize = (length vs), fValues = vs }
 
 
 -- |
 -- TODO | - Make this less frail
-newUniforms :: AppT os (UniformData os)
-newUniforms = do
-  scalars'  <- newUniformBuffer 3 (0)
-  matrices' <- newUniformBuffer 3 (identity)
-  vectors'  <- newUniformBuffer 3 (pure 0)
+--        - Move (?)
+newUniforms :: AppConfig -> AppT os (UniformData os)
+newUniforms config = UniformData
+                       <$> newUniformBuffer [pj, mv, identity] -- 3 (identity)
+                       <*> newUniformBuffer [0,0,0] -- 3 (0)
+                       <*> newUniformBuffer [pure 0,   pure 0,   pure 0] -- 3 (pure 0)
+  where
+    pj = (let (V2 x' y') = (*0.5) . fromIntegral <$> (config^.canvasSize) in ortho (-x') (x') (-y') (y') 0 1)
+    mv = (identity & translation.z .~ 0)
 
-  return $ UniformData {
-    fMatrices = matrices',
-    fScalars  = scalars',
-    fVectors  = vectors'
-  }
+  -- uniforms.projection          .= (let (V2 x' y') = (*0.5) . fromIntegral <$> (app^.easel.canvas.size) in ortho (-x') (x') (-y') (y') 0 1)
+  -- uniforms.modelview           .= (identity & translation.z .~ 0)
 
-
--- |
-newUniformBuffer :: BufferFormat a => Int -> HostFormat a -> AppT os (UniformBlock os (HostFormat a) a)
-newUniformBuffer n v = do
-  b <- newBuffer n
-  let vs = (replicate n v)
-  writeBuffer b 0 vs
-  return $ UniformBlock { fBuffer = b, fSize = n, fValues = vs }
+  -- return $  {
+  --   fMatrices = matrices',
+  --   fScalars  = scalars',
+  --   fVectors  = vectors'
+  -- }
 
 -- Shaders ---------------------------------------------------------------------------------------------------------------------------------
 
@@ -166,7 +172,7 @@ newUniformBuffer n v = do
 texturedShader :: Shader os (ShaderEnvironment os) (FragmentStream (ColorSample F RGBFloat))
 texturedShader = do
   -- Read the uniforms
-  [pv, mv] <- mapM uMatrix [0,1]
+  [pv, mv] <- mapM readMatrix [0,1]
 
   -- One day, in the distant future, I will come to know what a primitive stream is
   primitiveStream <- toPrimitiveStream (^.attributes.canvas)
@@ -179,7 +185,7 @@ texturedShader = do
 -- |
 colorShader :: Shader os (ShaderEnvironment os) (FragmentStream (ColorSample F RGBFloat))
 colorShader = do
-  [pv, mv] <- mapM uMatrix [0,1]
+  [pv, mv] <- mapM readMatrix [0,1]
 
   -- One day, in the distant future, I will come to know what a primitive stream is
   primitiveStream <- toPrimitiveStream (^.attributes.points)

@@ -65,13 +65,15 @@ import System.Directory (getDirectoryContents)
 import System.FSNotify
 import System.Console.ANSI as ANSI
 
+import qualified Codec.Picture.Types as Juicy
+
 import           Control.Monad.Trans.Class as St
 import           Control.Monad.IO.Class (liftIO)
 import qualified Control.Monad.Trans.State as St
 import           Control.Monad.Trans.Either
 import           Control.Lens hiding (argument, (<.>))
 import           Control.Monad
-import           Control.Monad.Loops (whileM)
+import           Control.Monad.Loops (whileM, whileJust)
 import           Control.Applicative ((<$>), (<*>), liftA2)
 import           Control.Concurrent (threadDelay, forkIO)
 import           Control.Concurrent.MVar
@@ -95,29 +97,6 @@ import qualified Pixels.Load   as Load
 
 -- Definitions ---------------------------------------------------------------------------------------------------------------------------------------
 
--- User interaction ----------------------------------------------------------------------------------------------------------------------------------
-
--- | TODO - We need to rehaul the events interface
-
--- Gets the current cursor position, in pixels relative to the top-left corner of the window.
--- getCursorPos :: MonadIO m => ContextT GLFWWindow os f m (Double, Double)
-
--- Gets the state of the specified MouseButton.
--- getMouseButton :: MonadIO m => MouseButton -> ContextT GLFWWindow os f m MouseButtonState
-
--- Gets the state of the specified Key.
--- getKey :: MonadIO m => Key -> ContextT GLFWWindow os f m KeyState
-
--- Registers the specified ScrollCallback.
--- registerScrollCallback :: MonadIO m => Maybe ScrollCallback -> ContextT GLFWWindow os f m ()
-
--- windowShouldClose :: MonadIO m => ContextT GLFWWindow os f m Bool
-
-
--- |
--- pressed :: S
-
-
 -- |
 -- TODO | - Move
 --        - Don't hard-code
@@ -126,13 +105,13 @@ root = "C:/Users/Jonatan/Desktop/Haskell/projects/Pixels"
 
 
 -- |
-initialInput :: InputChannel -> Input
-initialInput ch = Input {
-                    fMouse = Mouse {
-                      fCursor  = V2 0 0,
-                      fButtons = S.empty },
-                    fKeyboard  = S.empty,
-                    fInputChannel = ch }
+initialInput :: InputChannel -> V2 Int -> Input
+initialInput ch sz = Input {
+                       fSize   = sz,
+                       fScroll = V2 0 0,
+                       fMouse  = Mouse (V2 0 0) S.empty,
+                       fKeyboard = S.empty,
+                       fInputChannel = ch }
 
 -- App actions ---------------------------------------------------------------------------------------------------------------------------------------
 
@@ -165,6 +144,187 @@ saveCanvas app = do
     else liftIO . putStrLn $ "Invalid file name: " ++ (root </> "assets" </> now <.> "png")
   return app
 
+
+-- | Writes a pixel on the canvas if `p` is inside it
+drawPixelOnCanvas :: App os -> V2 Float -> V3 Juicy.Pixel8 -> AppT os (Either String ())
+drawPixelOnCanvas app p colour = Render.writePixel (floor <$> toCanvasCoords app p) colour (app^.easel.canvas.texture)
+
+
+-- |
+drawWithBrush :: App os -> V2 Float -> AppT os (Either String ()) 
+drawWithBrush app pos = drawPixelOnCanvas app pos (app^.easel.brush.colour)
+
+
+-- |
+erasePixel :: App os -> V2 Float -> AppT os (Either String ())
+erasePixel app pos = drawPixelOnCanvas app pos (app^.easel.canvas.colour)
+
+-- Event plumbing ------------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+-- TODO | - Add modifiers, scancode (?)
+--        - KeyDown
+--        - KeyUp
+--        - FileChange
+setupEvents :: Window os RGBFloat Depth -> AppT os (TChan AppEvent)
+setupEvents win = do
+  ch <- liftIO newTChanIO
+
+  GLFW.setDropCallback        win (Just $ \paths            -> putEvent ch $ FileDrop paths)
+  GLFW.setScrollCallback      win (Just $ \sx sy            -> putEvent ch $ MouseScroll (V2 sx sy))
+  GLFW.setCursorPosCallback   win (Just $ \mx my            -> putEvent ch $ MouseMotion (V2 mx my))
+  GLFW.setMouseButtonCallback win (Just $ \b bstate mods    -> putEvent ch $ makeMouseEvent b bstate mods)
+  GLFW.setKeyCallback         win (Just $ \k sc kstate mods -> putEvent ch $ makeKeyEvent k sc kstate mods)
+  GLFW.setWindowCloseCallback win (Just $ putEvent ch $ WindowClosing) -- TODO: Invoke directly (?)
+  -- GLFW.setCursorEnterCallback win (Just $ \cstate -> _)
+  -- (CursorState'InWindow, CursorState'NotInWindow)
+  -- setClipboardString, getClipboardString
+  return ch
+  where
+    makeMouseEvent b MouseButtonState'Pressed  _ = MouseDown b
+    makeMouseEvent b MouseButtonState'Released _ = MouseUp b
+
+    makeKeyEvent k _ (KeyState'Pressed)   mods = KeyDown k
+    makeKeyEvent k _ (KeyState'Released)  mods = KeyUp k
+    makeKeyEvent k _ (KeyState'Repeating) mods = KeyRepeat k
+    
+    putEvent :: TChan AppEvent -> AppEvent -> IO ()
+    putEvent ch = liftIO . atomically . writeTChan ch
+
+
+-- |
+-- TODO | - How do we deal with repeat events (does it even matter)?
+processEvents :: App os -> AppT os (App os)
+processEvents app = do
+  events <- liftIO $ whileJust (atomically . tryReadTChan $ app^.input.inputChannel) return
+  St.execStateT (mapM set events) app
+  where
+    -- TODO: Clean up on aisle 7
+    set :: AppEvent -> St.StateT (App os) (ContextT GLFW.Handle os IO) ()
+    set e = do
+      s  <- St.get
+      s' <- lift $ onevent s e
+      St.put s'
+
+-- Events --------------------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+onclosing :: App os -> AppT os (App os)
+onclosing app = liftIO $ do
+  putStrLn "\n\n\nI'm leaving"
+  return app
+
+
+-- |
+onkeydown :: App os -> Key -> AppT os (App os)
+onkeydown app k = case k of
+  Key'Space  -> clearCanvas app
+  Key'Escape -> quitApplication app
+  Key'S      -> saveCanvas app
+  _          -> return app
+
+
+-- |
+onmotion :: App os -> V2 Float -> AppT os (App os)
+onmotion app pos = do
+  when (app^.input.mouse.buttons.contains MouseButton'1) (void $ drawWithBrush app pos)
+  when (app^.input.mouse.buttons.contains MouseButton'2) (void $ erasePixel app pos)
+  return app
+
+
+-- |
+onmousedown :: App os -> MouseButton -> AppT os (App os)
+onmousedown app b = case b of
+  MouseButton'1 -> drawWithBrush app (app^.input.mouse.cursor) >> return app
+  MouseButton'2 -> erasePixel    app (app^.input.mouse.cursor) >> return app
+  _             -> return app
+
+
+-- |
+onscroll :: App os -> V2 Double -> AppT os (App os)
+onscroll app (V2 dx dy) = flip St.execStateT app $ do
+  -- TODO: Merge brush and palette
+  easel.palette %= stepBy (floor dy)
+  new <- St.get -- TODO: Refactor
+  easel.brush.colour .= (current $ new^.easel.palette)
+
+
+-- |
+onevent :: App os -> AppEvent -> AppT os (App os)
+onevent app e = case e of
+  MouseMotion mpos -> do
+    let npos = realToFrac <$> mpos
+    newapp <- return $ flip St.execState app $ do
+      input.mouse.cursor .= npos
+    onmotion newapp npos
+  KeyDown k   -> onkeydown (app & input.keyboard.contains k .~ True) k
+  KeyUp k     -> return (app & input.keyboard.contains k .~ False)
+  MouseDown b -> onmousedown (app & input.mouse.buttons.contains b .~ True) b
+  MouseUp b   -> return (app & input.mouse.buttons.contains b .~ False)
+  MouseScroll sc -> onscroll (app & input.scroll %~ (+ sc)) sc
+  WindowClosing -> onclosing app
+  _ -> return app
+
+-- Linear algebra (coordinate systems) ---------------------------------------------------------------------------------------------------------------
+
+-- TODO | - Factor out, refactor
+--        - Type safety (use types to distinguish different coordinate systems)
+
+-- |
+transformInverse :: App os -> M44 Float
+transformInverse = inv44 . modelProj
+
+
+-- |
+modelProj app = (app^.uniforms.singular (matrices.values.ix 0)) !*! (app^.uniforms.singular (matrices.values.ix 1))
+
+
+-- | Convert screen coordinates to canvas coordinates
+-- TODO | - This function has to be a lot cleverer
+--        - Take viewport into account
+--        - Factor out
+--        - All 2D (?)
+--        - Should W be 0 or 1
+toCanvasCoords :: App os -> V2 Float -> V2 Float
+toCanvasCoords app (V2 px py) = dropZW $ screenToNormalised app !*! fmap (fmap realToFrac) (transformInverse app) !* V4 px py 0 1
+-- toCanvasCoords app p = dropZW $ (fmap realToFrac <$> transformInverse app) !* to4D 0 (to3D 0 p)
+--fmap fromIntegral . (\(V2 mx my) -> V2 (mx) (app^.canvas.size.y-my) + origin app) . fmap floor
+
+
+-- |
+-- TODO | - Make sure this is correct
+--        -
+screenToNormalised :: App os -> M44 Float
+screenToNormalised app = translated !*! scaled (V4 (sx) (-sy) 1 1)
+  where
+    (V2 sx sy) = (2*) . recip . fromIntegral <$> app^.input.size
+    translated = identity & translation .~ V3 0 (fromIntegral $ app^.easel.canvas.size.y) 0
+
+
+-- toTextureCoords :: App os -> V2 Double -> V2 Int
+
+
+-- |
+-- origin :: App os -> V2 Int
+-- origin app = (`div` 2) <$> (app^.easel.canvas.size - app^.easel.canvas.size)
+
+-- Debugging and logging ----------------------------------------------------------------------------------------------------------------------------
+
+-- |
+alignedCoords :: String -> V2 Float -> IO ()
+alignedCoords label coord = let (V2 x y) = round <$> coord in printf "%-10s% 5d % 5d\n" (label ++ ":") (x :: Int) y
+
+
+-- |
+debugScreen :: App os -> AppT os ()
+debugScreen app = liftIO $ do
+  let sm = app^.input.mouse.cursor
+      cm = toCanvasCoords app sm
+  alignedCoords "Screen" sm
+  alignedCoords "Canvas" cm
+  printf "% 6s|%-6s\n" (show $ app^.input.mouse.buttons.contains MouseButton'1) (show $ app^.input.mouse.buttons.contains MouseButton'2)
+  cursorUp 3
+
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- |
@@ -185,46 +345,18 @@ main = runContextT GLFW.defaultHandleConfig $ do
 
   cvs <- Render.newCanvas (config^.canvasSize) (config^.canvasColour)
   br  <- Render.newBrush  (V2 0 0)             (config^.brushColour)
-  us  <- Render.newUniforms
+  us  <- Render.newUniforms config
 
   -- TODO: How do you use the same shader for different topologies?
   shade <- compileShader $ do
     canvasFragments <- Render.texturedShader
-    pointFragments  <- Render.colorShader
     drawWindowColor (\_ -> (win, ContextColorOption NoBlending (pure True) :: ContextColorOption RGBFloat)) canvasFragments
+    pointFragments  <- Render.colorShader
     drawWindowColor (\_ -> (win, ContextColorOption NoBlending (pure True) :: ContextColorOption RGBFloat)) pointFragments
     -- ContextColorOption NoBlending (pure True :: ColorMask RGBFloat)
 
   -- Events
-  channel <- liftIO newTChanIO
-
-  -- TODO | - KeyDown
-  --        - KeyUp
-  --        - FileChange
-
-  -- TODO | - Add modifiers, scancode (?)
-  let makeMouseEvent b MouseButtonState'Pressed  _ = MouseDown b
-      makeMouseEvent b MouseButtonState'Released _ = MouseUp b
-
-      makeKeyEvent k _ (KeyState'Pressed)   mods = KeyDown k
-      makeKeyEvent k _ (KeyState'Released)  mods = KeyUp k
-      makeKeyEvent k _ (KeyState'Repeating) mods = KeyRepeat k
-      
-      putEvent :: AppEvent -> IO ()
-      putEvent = liftIO . atomically . writeTChan channel
-
-  GLFW.setDropCallback        win (Just $ \paths            -> putEvent $ FileDrop paths)
-  GLFW.setScrollCallback      win (Just $ \sx sy            -> putEvent $ MouseScroll (V2 sx sy))
-  GLFW.setCursorPosCallback   win (Just $ \mx my            -> putEvent $ MouseMotion (V2 mx my))
-  GLFW.setMouseButtonCallback win (Just $ \b bstate mods    -> putEvent $ makeMouseEvent b bstate mods)
-  GLFW.setKeyCallback         win (Just $ \k sc kstate mods -> putEvent $ makeKeyEvent k sc kstate mods)
-  -- setCursorEnterCallback :: MonadIO m => Window os c ds -> Maybe (CursorState -> IO ()) -> ContextT Handle os m (Maybe ())
-
-  -- setClipboardString 
-  -- getClipboardString 
-
-  -- setWindowShouldClose :: MonadIO m => Window os c ds -> Bool -> ContextT Handle os m (Maybe ())
-  -- setWindowCloseCallback :: MonadIO m => Window os c ds -> Maybe (IO ()) -> ContextT Handle os m (Maybe ())
+  channel <- setupEvents win
 
   -- Off we go
   mainloop $ App {
@@ -234,39 +366,9 @@ main = runContextT GLFW.defaultHandleConfig $ do
     fEasel         = Easel {
                        fCanvas  = cvs,
                        fBrush   = br,
-                       fPalette = config^.easelPalette },
+                       fPalette = let (Just xs) = newCircleList (config^.easelPalette) in xs }, -- TODO: Don't assume
     fWindow        = win,
-    fInput         = initialInput channel -- (InputChannel channel)
-  }
-
-
--- |
-onkeydown :: App os -> Key -> AppT os (App os)
-onkeydown app k = case k of
-  Key'Space  -> clearCanvas app
-  Key'Escape -> quitApplication app
-  Key'S      -> saveCanvas app
-  _          -> return app
-
-
--- |
-onevent :: App os -> AppT os (App os)
-onevent app e = _
-
-
--- |
-processEvents :: App os -> AppT os Input
-processEvents app = do
-  -- cursor   <- fmap realToFrac . uncurry V2 . fromMaybe (0,0) <$> GLFW.getCursorPos (app^.window)
-  -- keys     <- S.fromList <$> filterM (keyDown    $ app^.window) [Key'Space .. Key'Menu] --[toEnum 0 ..]
-  -- mbuttons <- S.fromList <$> filterM (buttonDown $ app^.window) [toEnum 0 ..]
-
-  -- whileM (/= Nothing) (tryReadTChan $ app^.input.inputChannel)
-  liftIO $ (atomically . tryReadTChan $ app^.input.inputChannel) >>= print
-  return $ Input {
-    fMouse    = Mouse { fCursor = cursor, fButtons = mbuttons },
-    fKeyboard = keys,
-    fInputChannel = app^.input.inputChannel
+    fInput         = initialInput channel (config^.windowSize) -- (InputChannel channel)
   }
 
 
@@ -274,15 +376,7 @@ processEvents app = do
 tick :: App os -> AppT os (App os)
 tick app' = do
   -- Read input
-  input' <- processEvents app'
-
-  -- New app state
-  app <- flip St.execStateT app' $ do
-    app <- St.get
-    input .= input'
-    uniforms.vectors.values.ix 0 .= (realToFrac <$> to3D 0 (app^.input.mouse.cursor))
-    uniforms.projection          .= (let (V2 x' y') = (*0.5) . fromIntegral <$> (app^.easel.canvas.size) in ortho (-x') (x') (-y') (y') 0 1)
-    uniforms.modelview           .= (identity & translation.z .~ 0)
+  app <- processEvents app'
 
   -- Write uniforms
   writeBuffer (app^.uniforms.matrices.buffer) 0 (app^.uniforms.matrices.values)
@@ -292,61 +386,24 @@ tick app' = do
   -- Write attributes
   writeBuffer (app^.easel.brush.positionBuffer) 0 [let (V2 x y) = app^.input.mouse.cursor
                                                        pos      = screenToNormalised app !* (V4 x y 0 1)
-                                                       pixel    = fromIntegral <$> head (app^.easel.palette)
+                                                       pixel    = app^.easel.brush.colour --fromIntegral <$> head (app^.easel.palette)
                                                    in (pos, V3 0 0 0)]
 
   -- Paint the canvas
   -- TODO: Apply transform
-  void $ do
-    maybe pass (\p -> writePixel app p (app^.easel.brush.colour)  >> debugCoords app) (mousepressAt app MouseButton'1)
-    maybe pass (\p -> writePixel app p (app^.easel.canvas.colour) >> debugCoords app) (mousepressAt app MouseButton'2)
+  debugScreen app
+  -- when (app^.input.mouse.buttons.contains MouseButton'1) $ do
+  --   liftIO $ putStrLn "Draw"
+  --   void $ drawPixelOnCanvas app (app^.input.mouse.cursor) (app^.easel.brush.colour)
+
+  -- when (app^.input.mouse.buttons.contains MouseButton'2) $ do
+  --   liftIO $ putStrLn "Erase"
+  --   (void $ drawPixelOnCanvas app (app^.input.mouse.cursor) (app^.easel.canvas.colour))
   
   return app
-  where
-    alignedCoords :: String -> V2 Float -> IO ()
-    alignedCoords label coord = let (V2 x y) = round <$> coord in printf "%-10s% 4d % 4d\n" (label ++ ":") (x :: Int) y
-
-    debugCoords app = liftIO $ do
-      let sm = app^.input.mouse.cursor
-          cm = toCanvasCoords app sm
-      alignedCoords "Screen" sm
-      alignedCoords "Canvas" cm
-      cursorUp 2
-
-    -- TODO | - Factor out, refactor
-    transformInverse :: App os -> M44 Float
-    transformInverse = inv44 . modelProj
-
-    modelProj app = (app^.uniforms.singular (matrices.values.ix 0)) !*! (app^.uniforms.singular (matrices.values.ix 1))
-
-    -- | Convert screen coordinates to canvas coordinates
-    -- TODO | - This function has to be a lot cleverer
-    --        - Take viewport into account
-    --        - Factor out
-    --        - All 2D (?)
-    --        - Should W be 0 or 1
-    toCanvasCoords :: App os -> V2 Float -> V2 Float
-    toCanvasCoords app (V2 px py) = dropZW $ screenToNormalised app !*! fmap (fmap realToFrac) (transformInverse app) !* V4 px py 0 1
-    -- toCanvasCoords app p = dropZW $ (fmap realToFrac <$> transformInverse app) !* to4D 0 (to3D 0 p)
-    --fmap fromIntegral . (\(V2 mx my) -> V2 (mx) (app^.canvas.size.y-my) + origin app) . fmap floor
-
-    -- |
-    screenToNormalised :: App os -> M44 Float
-    screenToNormalised app = (identity & translation .~ V3 0 (fromIntegral $ app^.easel.canvas.size.y) 0) !*! scaled (V4 (2*1/512) (-2*1/512) 1 1)
-
-    -- toTextureCoords :: App os -> V2 Double -> V2 Int
-    projection :: (IxValue [M44 Float] -> Identity (IxValue [M44 Float])) -> UniformData os -> Identity (UniformData os)
-    projection = matrices.values.ix 0
-    modelview  = matrices.values.ix 1
-
-    -- |
-    origin :: App os -> V2 Int
-    origin app = (`div` 2) <$> (app^.easel.canvas.size - app^.easel.canvas.size)
-
-    writePixel app p colour = Render.writePixel (floor <$> toCanvasCoords app p) colour (app^.easel.canvas.texture)
 
 
--- -- |
+-- |
 mainloop :: App os -> AppT os ()
 mainloop app' = do
   Render.render app'

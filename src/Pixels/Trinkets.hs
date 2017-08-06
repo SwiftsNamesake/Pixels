@@ -16,8 +16,6 @@
 -- SPEC | -
 --        -
 
-
-
 --- GHC directives -----------------------------------------------------------------------------------------------------------------------------------
 
 {-# LANGUAGE NoImplicitPrelude    #-}
@@ -28,15 +26,18 @@
 -- API -----------------------------------------------------------------------------------------------------------------------------------------------
 
 module Pixels.Trinkets (
-  flushed,
+  -- * Console IO
+  flushed, putStr, putStrLn, putChar, print,
+
+  -- * Stuff
   pass, execute, sequencePairs,
   hasExtension,
-  putStr, putStrLn, putChar, print,
   flatten, asList,
   indentedStrLn,
 
+  -- * Linear algebra
   to2D, to3D, to4D, dropY, dropZ, dropZW,
-  axisRotation, texcoord
+  axisRotation, texcoord,
 ) where
 
 --- We'll need these ---------------------------------------------------------------------------------------------------------------------------------

@@ -27,12 +27,20 @@
 
 --- API ----------------------------------------------------------------------------------------------------------------------------------------------
 
-module Pixels.Types where
+-- TODO | - Explicit exports
+module Pixels.Types where -- (
+  -- * App
+
+  -- *
+  -- CircleList, newCircleList, next, prev, current
+-- ) where
 
 -- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
-import Data.Set (Set)
-import           Data.Word
+
+import Data.Vector (Vector, (!), fromList)
+import Data.Set    (Set)
+import Data.Word
 -- import           Data.Colour
 -- import qualified Data.Array.Repa as R
 
@@ -82,6 +90,9 @@ data App os = App {
 
 -- | 
 data Input = Input {
+  -- fBounds   :: ,
+  fScroll   :: V2 Double,
+  fSize     :: V2 Int,
   fMouse    :: Mouse,
   fKeyboard :: Set Key,
   fInputChannel :: InputChannel
@@ -91,10 +102,11 @@ data Input = Input {
 -- | Coming soon...
 -- TODO | - Unify events (?)
 -- newtype InputChannel = InputChannel (TChan AppEvent)
-type InputChannel = (TChan AppEvent)
+type InputChannel = TChan AppEvent
 
 
 -- |
+-- TODO | - Complete (resize, minimise, maximise, enter, leave, Pending FileDrop, etc.)
 data AppEvent =   MouseMotion (V2 Double)
                 | MouseDown   MouseButton
                 | MouseUp     MouseButton
@@ -104,7 +116,7 @@ data AppEvent =   MouseMotion (V2 Double)
                 | KeyRepeat   Key
                 | FileDrop    [String]
                 | FileChange  () -- TODO: Fix
-                | WindowClose
+                | WindowClosing
                 deriving (Eq, Show)
 
 
@@ -119,7 +131,7 @@ data Mouse = Mouse {
 data Easel os = Easel {
   fBrush   :: Brush os,
   fCanvas  :: Canvas os,
-  fPalette :: [V3 Juicy.Pixel8]
+  fPalette :: CircleList (V3 Juicy.Pixel8)
 }
 
 
@@ -196,3 +208,39 @@ data UndoAction = UndoAction deriving (Show, Eq)
 -- | 
 -- data Brush = Brush
 
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+-- newtype WindowCoords = WindowCoords (V2 f)
+-- newtype ClientCoords = ClientCoords (V2 f)
+-- newtype ScreenCoords = ScreenCoords (V2 f)
+-- newtype CanvasCoords = CanvasCoords (V2 f) -- TODO: General type for 'entity-specific' coords
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- | Opaque type with circular indexing behaviour
+-- TODO | - Factor out
+--        - Polymorphic (eg. any container, any key, IsList)
+data CircleList a = CircleList (Vector a) Int Int
+
+
+-- |
+newCircleList :: [a] -> Maybe (CircleList a)
+newCircleList xs
+  | null xs   = Nothing -- n % 0 makes no sense
+  | otherwise = Just $ CircleList (fromList xs) 0 (length xs)
+
+
+-- |
+-- TODO | - Rename (?)
+stepBy :: Int -> CircleList a -> CircleList a
+stepBy by (CircleList xs i len) = CircleList xs (mod (i+by) len) len
+
+next :: CircleList a -> CircleList a
+next = stepBy 1
+
+prev :: CircleList a -> CircleList a
+prev = stepBy (-1)
+
+current :: CircleList a -> a
+current (CircleList xs i len) = xs ! i
