@@ -107,6 +107,7 @@ type InputChannel = TChan AppEvent
 
 -- |
 -- TODO | - Complete (resize, minimise, maximise, enter, leave, Pending FileDrop, etc.)
+--        - Elm style event mapping (eg. UIEvent -> AppAction) (?)
 data AppEvent =   MouseMotion (V2 Double)
                 | MouseDown   MouseButton
                 | MouseUp     MouseButton

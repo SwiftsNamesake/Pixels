@@ -5,4 +5,5 @@
 dist/
 .stack-work/
 .cabal-sandbox/
+assets/saves/*.png
 libs/
