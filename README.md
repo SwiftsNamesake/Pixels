@@ -10,9 +10,9 @@ TODO
 ====
 
   - [ ] Language enhancements
-    - Alternative Prelude (cf. [numeric-prelude](https://hackage.haskell.org/package/numeric-prelude)) (?)
-    - Use [foundation](https://hackage.haskell.org/package/foundation) (?)
-  - [ ]Dev tools (SET UP A PROPER WORKFLOW, cf. ghc-mod)
+    - [ ] Alternative Prelude (cf. [numeric-prelude](https://hackage.haskell.org/package/numeric-prelude)) (?)
+    - [ ] Use [foundation](https://hackage.haskell.org/package/foundation) (?)
+  - [ ] Dev tools (SET UP A PROPER WORKFLOW, cf. ghc-mod)
   - [ ] Icon
   - [ ] Tools
     - Boolean operations
