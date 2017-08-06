@@ -37,7 +37,7 @@ TODO
     - Command palette
     
   - [ ] Interesting libraries
-        - (Diagrams)[http://projects.haskell.org/diagrams/]
+        - [Diagrams](http://projects.haskell.org/diagrams/)
 
   - [ ] How to deal with external DLLs
   - [ ] Is Awesomium 32-bit only?
