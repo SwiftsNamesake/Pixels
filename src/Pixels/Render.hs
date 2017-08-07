@@ -38,6 +38,10 @@ import qualified Data.Map         as M
 import qualified Data.Vector.Storable as VS
 import           Data.Foldable (toList)
 
+import qualified Data.Array.Repa as R
+import           Data.Array.Repa ((:.)(..))
+import           Data.Array.Repa.Repr.Unboxed (Unbox(..))
+
 import qualified Codec.Picture       as Juicy
 import qualified Codec.Picture.Types as Juicy
 
@@ -291,3 +295,8 @@ writePixel p pixel tex = maybe
 -- | Creates a monochrome texture
 monochrome :: V2 Int -> V3 Juicy.Pixel8 -> AppT os (Texture2D os (Format RGBFloat))
 monochrome size@(V2 dx dy) colour = fromPixels size (replicate (dx*dy) colour)
+
+
+-- | R.Array R.U R.DIM2 pixel
+createRepaImage :: Unbox a => V2 Int -> (V2 Int -> a) -> R.Array R.U R.DIM2 (a)
+createRepaImage (V2 dx dy) f = R.fromListUnboxed (R.Z :. dx :. dy) [ f (V2 x y) | x <- [0..dx-1], y <- [0..dy-1] ]

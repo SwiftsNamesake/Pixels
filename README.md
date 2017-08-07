@@ -8,7 +8,13 @@ Contributors
 
 TODO
 ====
-
+  - [ ] Distribution
+    - Licensing, terms
+    - Bundling assets
+    - Cross-platform
+    - Signing binaries, certificates
+    - Patching, updates
+    - Resilience (eg. prevent tampering, faulty states) (cf. [hashing](https://hackage.haskell.org/package/executable-hash), signing)
   - [ ] Language enhancements
     - [ ] Alternative Prelude (cf. [numeric-prelude](https://hackage.haskell.org/package/numeric-prelude)) (?)
     - [ ] Use [foundation](https://hackage.haskell.org/package/foundation) (?)

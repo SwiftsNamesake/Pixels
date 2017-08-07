@@ -140,7 +140,7 @@ saveCanvas :: App os -> AppT os (App os)
 saveCanvas app = do
   now <- normalise . formatTime defaultTimeLocale "%s" <$> liftIO getCurrentTime
   if isValid now
-    then Render.save (root </> "assets" </> now <.> "png") (app^.easel.canvas.texture) id
+    then Render.save (root </> "assets" </> "saves" </> now <.> "png") (app^.easel.canvas.texture) id
     else liftIO . putStrLn $ "Invalid file name: " ++ (root </> "assets" </> now <.> "png")
   return app
 
@@ -197,7 +197,8 @@ setupEvents win = do
 processEvents :: App os -> AppT os (App os)
 processEvents app = do
   events <- liftIO $ whileJust (atomically . tryReadTChan $ app^.input.inputChannel) return
-  St.execStateT (mapM set events) app
+  sz     <- getFrameBufferSize (app^.window)
+  St.execStateT (mapM set events) (app & input.size .~ sz)
   where
     -- TODO: Clean up on aisle 7
     set :: AppEvent -> St.StateT (App os) (ContextT GLFW.Handle os IO) ()
@@ -252,17 +253,13 @@ onscroll app (V2 dx dy) = flip St.execStateT app $ do
 -- |
 onevent :: App os -> AppEvent -> AppT os (App os)
 onevent app e = case e of
-  MouseMotion mpos -> do
-    let npos = realToFrac <$> mpos
-    newapp <- return $ flip St.execState app $ do
-      input.mouse.cursor .= npos
-    onmotion newapp npos
-  KeyDown k   -> onkeydown (app & input.keyboard.contains k .~ True) k
-  KeyUp k     -> return (app & input.keyboard.contains k .~ False)
-  MouseDown b -> onmousedown (app & input.mouse.buttons.contains b .~ True) b
-  MouseUp b   -> return (app & input.mouse.buttons.contains b .~ False)
-  MouseScroll sc -> onscroll (app & input.scroll %~ (+ sc)) sc
-  WindowClosing -> onclosing app
+  MouseMotion pos' -> let pos = realToFrac <$> pos' in onmotion (app & input.mouse.cursor .~ pos) pos
+  KeyDown k        -> onkeydown (app & input.keyboard.contains k .~ True) k
+  KeyUp k          -> return (app & input.keyboard.contains k .~ False)
+  MouseDown b      -> onmousedown (app & input.mouse.buttons.contains b .~ True) b
+  MouseUp b        -> return (app & input.mouse.buttons.contains b .~ False)
+  MouseScroll sc   -> onscroll (app & input.scroll %~ (+ sc)) sc
+  WindowClosing    -> onclosing app
   _ -> return app
 
 -- Linear algebra (coordinate systems) ---------------------------------------------------------------------------------------------------------------
@@ -329,11 +326,18 @@ debugScreen app = liftIO $ do
 
 -- |
 -- TODO | - Rename
---        -
-main :: IO ()
-main = runContextT GLFW.defaultHandleConfig $ do
+run :: IO (Either String ())
+run = runEitherT $ do
+  config <- EitherT . loadConfig $ root </> "assets/settings/config.json"
+  EitherT $ Right <$> runApplication config
 
-  (Right config) <- liftIO $ loadConfig (root </> "assets/settings/config.json")
+
+-- |
+-- TODO | - Rename
+--        - Separate initialise and execute functions (?)
+--        - Communicate with the 'outside', return some message or accept a queue for messages (?)
+runApplication :: AppConfig -> IO ()
+runApplication config = runContextT GLFW.defaultHandleConfig $ do
 
   win <- newWindow (WindowFormatColorDepth RGB8 Depth32) $ WindowConfig {
                                                              configWidth   = config^.windowSize.x

@@ -19,4 +19,6 @@ module Main where
 import qualified Pixels.Interaction as Interaction
 
 main :: IO ()
-main = Interaction.main
+main = do
+  Interaction.run
+  return ()
