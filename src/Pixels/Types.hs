@@ -37,11 +37,12 @@ module Pixels.Types where -- (
 
 -- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
-
-import Data.Vector (Vector, (!), fromList)
-import Data.Set    (Set)
-import Data.Word
+import           Data.Vector (Vector, (!), fromList)
+import qualified Data.Vector.Unboxed as VU
+import           Data.Set (Set)
+import           Data.Word
 -- import           Data.Colour
+
 -- import qualified Data.Array.Repa as R
 
 import Linear (V2(..), V3(..), M44)
@@ -55,36 +56,64 @@ import Graphics.GPipe.Context.GLFW.Input (Key(..), MouseButton(..))
 
 --- Types --------------------------------------------------------------------------------------------------------------------------------------------
 
-type AppContext = (WindowFormat RGBFloat Depth)
--- type AppT os a  = ContextT (Window os RGBFloat Depth) os IO a
+-- TODO | - Type synonyms for reused types (type family?)
+--        -
+
+type AppContext = WindowFormat RGBAFloat Depth
+-- type AppT os a  = ContextT (Window os RGBAFloat Depth) os IO a
 type AppT os a  = ContextT Handle os IO a
 -- AppVertexFormat
+type Pixel = V4 Word8
 
 type VertexAttributes = (B4 Float, B2 Float)
 
-type UniformBlockMatrix os = UniformBlock os (M44 Float) (M44 (B Float))
+-- type UniformBlockMatrix os = UniformBlock os (M44 (B Float)) -- (M44 Float) (M44 (B Float))
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 data AppConfig = AppConfig {
   fCanvasSize   :: V2 Int,
-  fCanvasColour :: V3 Juicy.Pixel8,
+  fCanvasColour :: Pixel,
   fWindowSize   :: V2 Int,
-  fBrushColour  :: V3 Juicy.Pixel8,
-  fEaselPalette :: [V3 Juicy.Pixel8]
-}
+  fBrushColour  :: Pixel,
+  fEaselPalette :: [Pixel]
+} deriving (Show)
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 -- | 
 data App os = App {
-  fWindow :: Window os RGBFloat Depth,
+  fWindow :: Window os RGBAFloat Depth,
   fEasel  :: Easel os, -- Canvas os,
-  fShader :: CompiledShader os (ShaderEnvironment os), -- (WindowFormat RGBFloat Depth),
+  fShader :: CompiledShader os (ShaderEnvironment os), -- (WindowFormat RGBAFloat Depth),
   fInput  :: Input,
-  fUndoQueue :: [UndoAction],
+  -- fUndoQueue :: [UndoAction],
   fUniforms  :: UniformData os,
   fRasterOptions :: (Side, ViewPort, DepthRange)
+}
+
+
+-- | 
+data Easel os = Easel {
+  fBrush   :: Brush os,
+  fCanvas  :: Canvas os,
+  fPalette :: CircleList (Pixel)
+}
+
+
+-- | 
+data Brush os = Brush {
+  fColour         :: Pixel,
+  fPositionBuffer :: Buffer os (B4 Float, B4 Float)
+}
+
+
+-- | 
+-- TODO | - Make `Canvas` a special case of some kind of `Widget` type
+--          that knows how to render itself, and keep the CPU/GPU data in sync (ongoing; cf. Surface)
+data Canvas os = Canvas {
+  fColour   :: Pixel,
+  fSurface  :: Surface os
 }
 
 
@@ -98,6 +127,33 @@ data Input = Input {
   fInputChannel :: InputChannel
 } -- deriving (Show)
 
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+-- TODO | - Gotta think carefully about the type of fPixels
+--        -
+data Surface os = Surface {
+  fSize     :: V2 Int,
+  fTexture  :: Texture2D os (Format RGBAFloat),
+  fPixels   :: CPUTexture,
+               -- VU.Vector Pixel,
+               -- R.Array R.U R.DIM2 (Pixel), -- TODO: Rename (?)
+  fVertices :: Buffer os VertexAttributes, -- The shape of the Surface itself
+  -- TODO | - Dirty flag, or some smarter way of syncing texture/pixels (?)
+  --        - Don't update more than necessary (eg. use a dirtyRect, BoundingBox (V2 Int))
+  fDirty :: Bool
+}
+
+
+-- |
+data CPUTexture = CPUTexture {
+  fVector :: (VU.Vector Pixel),
+  fSize :: (V2 Int)
+}
+
+
+-- Input ---------------------------------------------------------------------------------------------------------------------------------------------
 
 -- | Coming soon...
 -- TODO | - Unify events (?)
@@ -116,7 +172,7 @@ data AppEvent =   MouseMotion (V2 Double)
                 | KeyUp       Key
                 | KeyRepeat   Key
                 | FileDrop    [String]
-                | FileChange  () -- TODO: Fix
+                -- | FileChanged () -- TODO: Fix
                 | WindowClosing
                 deriving (Eq, Show)
 
@@ -128,43 +184,26 @@ data Mouse = Mouse {
 } deriving (Show)
 
 
--- | 
-data Easel os = Easel {
-  fBrush   :: Brush os,
-  fCanvas  :: Canvas os,
-  fPalette :: CircleList (V3 Juicy.Pixel8)
-}
+-- |
+-- data KeyBindings = KeyBindings {}
 
-
--- | 
-data Brush os = Brush {
-  fColour         :: V3 Juicy.Pixel8,
-  fPositionBuffer :: Buffer os (B4 Float, B3 Float)
-}
-
-
--- | 
-data Canvas os = Canvas {
-  fSize     :: V2 Int,
-  fColour   :: V3 Juicy.Pixel8,
-  fTexture  :: Texture2D os (Format RGBFloat),
-  fVertices :: Buffer os VertexAttributes -- The shape of the canvas itself
-}
-
+-- GPU Graphics --------------------------------------------------------------------------------------------------------------------------------------
 
 -- | 
 data TextureEnvironment os = TextureEnvironment {
-  fTexture :: Texture2D os (Format RGBFloat),
-  fFilterMode :: SamplerFilter RGBFloat,
+  fTexture :: Texture2D os (Format RGBAFloat),
+  fFilterMode :: SamplerFilter RGBAFloat,
   fEdgeMode   :: EdgeMode2
-  --, BorderColor (Format RGBFloat)),
+  --, BorderColor (Format RGBAFloat)),
 }
 
 
 -- | 
+-- TODO | - Frail, fix
+--        - Fix types
 data UniformBlock os a b = UniformBlock {
   fBuffer :: Buffer os (Uniform b),
-  fValues :: [a], -- [HostFormat a],
+  fValues :: [a], -- [HostFormat b], -- makeLensesWith barfs at type families
   fSize   :: Int
 }
 
@@ -172,8 +211,8 @@ data UniformBlock os a b = UniformBlock {
 -- | 
 data UniformData os = UniformData {
   fMatrices :: UniformBlock os (M44 Float) (M44 (B Float)),
-  fScalars  :: UniformBlock os (Float)     (B   (Float)),
-  fVectors  :: UniformBlock os (V3 Float)  (B3  (Float))
+  fScalars  :: UniformBlock os (Float)     (B Float),
+  fVectors  :: UniformBlock os (V3 Float)  (B3 Float)
 }
 
 
@@ -181,7 +220,7 @@ data UniformData os = UniformData {
 -- TODO | - How do we 'merge' the two versions of AttributeData?
 data AttributeData os = AttributeData {
   fCanvas :: PrimitiveArray Triangles VertexAttributes,
-  fPoints :: PrimitiveArray Points    (B4 Float, B3 Float)
+  fPoints :: PrimitiveArray Points    (B4 Float, B4 Float)
 }
 
 
@@ -203,7 +242,7 @@ data ShaderEnvironment os = ShaderEnvironment {
 -- data UIOverlay = UIOverlay {}
 
 
-data UndoAction = UndoAction deriving (Show, Eq)
+-- data UndoAction = UndoAction deriving (Show, Eq)
 
 
 -- | 
@@ -244,4 +283,4 @@ prev :: CircleList a -> CircleList a
 prev = stepBy (-1)
 
 current :: CircleList a -> a
-current (CircleList xs i len) = xs ! i
+current (CircleList xs i _) = xs ! i

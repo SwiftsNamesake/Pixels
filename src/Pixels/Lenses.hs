@@ -19,6 +19,7 @@
 -- GHC Pragmas ---------------------------------------------------------------------------------------------------------------------------------------
 
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RankNTypes #-}
 
 --- API ----------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -26,9 +27,13 @@ module Pixels.Lenses where
 
 -- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
+import Data.Set (Set)
+
 -- import Control.Monad (forM_, forM, mapM_, mapM)
-import Control.Lens (makeLensesWith, abbreviatedFields, ix, Simple, Lens, Traversal, Identity, IxValue)
+import Control.Lens (makeLensesWith, abbreviatedFields, ix, _2, contains, Simple, Lens, Traversal, Identity, IxValue)
 import Linear       (M44)
+import Graphics.GPipe
+import Graphics.GPipe.Context.GLFW.Input (Key(..), MouseButton(..))
 
 import Pixels.Types
 
@@ -46,20 +51,45 @@ import Pixels.Types
 --                                          ''Easel,
 --                                          ''AppConfig]
 
+makeLensesWith abbreviatedFields ''AppConfig
+
 makeLensesWith abbreviatedFields ''App
 makeLensesWith abbreviatedFields ''Canvas
+makeLensesWith abbreviatedFields ''Surface
 makeLensesWith abbreviatedFields ''Brush
+
+makeLensesWith abbreviatedFields ''ShaderEnvironment
 makeLensesWith abbreviatedFields ''AttributeData
 makeLensesWith abbreviatedFields ''UniformData
 makeLensesWith abbreviatedFields ''UniformBlock
+makeLensesWith abbreviatedFields ''TextureEnvironment
+
 makeLensesWith abbreviatedFields ''Input
 makeLensesWith abbreviatedFields ''Mouse
-makeLensesWith abbreviatedFields ''ShaderEnvironment
-makeLensesWith abbreviatedFields ''TextureEnvironment
 makeLensesWith abbreviatedFields ''Easel
-makeLensesWith abbreviatedFields ''AppConfig
+
+makeLensesWith abbreviatedFields ''CPUTexture
+
+-- Input ---------------------------------------------------------------------------------------------------------------------------------------------
+
+mousebuttons :: Simple Lens (App os) (Set MouseButton)
+mousebuttons = input.mouse.buttons
+
+hasMousebutton :: MouseButton -> Simple Lens (App os) Bool
+hasMousebutton b = input.mouse.buttons.contains b
+
+keys :: Simple Lens (App os) (Set Key)
+keys = input.keyboard
+
+hasKey :: Key -> Simple Lens (App os) Bool
+hasKey k = input.keyboard.contains k
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- |
+viewport :: Simple Lens (App os) ViewPort
+viewport = rasterOptions . _2
+
 
 -- |
 projection :: (IxValue [M44 Float] -> Identity (IxValue [M44 Float])) -> UniformData os -> Identity (UniformData os)

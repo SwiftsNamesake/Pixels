@@ -27,7 +27,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE FlexibleContexts  #-}
 {-# LANGUAGE PackageImports    #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeFamilies      #-}
+{-# LANGUAGE DuplicateRecordFields  #-}
 
 -- API -----------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -48,12 +50,13 @@ import           Data.Foldable
 import qualified Data.Set         as S
 import qualified Data.Map         as M
 import qualified Data.Traversable as T
+import qualified Data.Vector.Unboxed as VU
 -- import           Data.Aeson
 import           Data.List  (transpose, isInfixOf, sortBy)
 import           Data.Ord   (comparing)
 
-import           Data.Array.Repa ((:.)(..))
-import qualified Data.Array.Repa as R
+-- import           Data.Array.Repa ((:.)(..))
+-- import qualified Data.Array.Repa as R
 
 import Text.Printf
 import Text.Read (readMaybe, readEither)
@@ -80,7 +83,7 @@ import           Control.Concurrent.MVar
 import           Control.Concurrent.STM
 import           Control.Exception (finally, catch, displayException)
 
-import           Graphics.GPipe hiding (texture)
+import           Graphics.GPipe hiding (texture, vector)
 import qualified Graphics.GPipe.Context.GLFW       as GLFW
 import           Graphics.GPipe.Context.GLFW       (WindowConfig(..), setWindowShouldClose)
 import           Graphics.GPipe.Context.GLFW.Input (Key(..), KeyState(..), MouseButton(..), MouseButtonState(..))
@@ -92,8 +95,9 @@ import           Pixels.Types
 import           Pixels.Lenses
 import           Pixels.Persistence
 import           Pixels.Trinkets
-import           Pixels.Render as Render
-import qualified Pixels.Load   as Load
+import           Pixels.Render.Surface as Surface
+import           Pixels.Render         as Render
+import qualified Pixels.Load           as Load
 
 -- Definitions ---------------------------------------------------------------------------------------------------------------------------------------
 
@@ -119,11 +123,9 @@ initialInput ch sz = Input {
 
 -- | 
 clearCanvas :: App os -> AppT os (App os)
-clearCanvas app = do
-  -- TODO: Clear texture instead of recreating
-  -- clearImageColor
-  blank <- Render.new (app^.easel.canvas.size) (\_ -> app^.easel.canvas.colour)
-  return $ app & easel.canvas.texture .~ blank
+clearCanvas app = return (app & easel.canvas.surface.pixels.vector %~ VU.map (const fill))
+  where
+    fill = app^.easel.canvas.colour
 
 
 -- |
@@ -140,24 +142,48 @@ saveCanvas :: App os -> AppT os (App os)
 saveCanvas app = do
   now <- normalise . formatTime defaultTimeLocale "%s" <$> liftIO getCurrentTime
   if isValid now
-    then Render.save (root </> "assets" </> "saves" </> now <.> "png") (app^.easel.canvas.texture) id
+    then Surface.saveGPUTexture (root </> "assets" </> "saves" </> now <.> "png") (app^.easel.canvas.surface.texture) id
     else liftIO . putStrLn $ "Invalid file name: " ++ (root </> "assets" </> now <.> "png")
   return app
 
 
 -- | Writes a pixel on the canvas if `p` is inside it
-drawPixelOnCanvas :: App os -> V2 Float -> V3 Juicy.Pixel8 -> AppT os (Either String ())
-drawPixelOnCanvas app p colour = Render.writePixel (floor <$> toCanvasCoords app p) colour (app^.easel.canvas.texture)
+-- drawPixelOnCanvas :: App os -> V2 Float -> Pixel -> AppT os (Either String ())
+-- drawPixelOnCanvas app p colour = Render.writePixel (floor <$> toCanvasCoords app p) colour (app^.easel.canvas.texture)
+drawPixelOnCanvas :: App os -> V2 Float -> Pixel -> AppT os (App os)
+drawPixelOnCanvas app p colour = return (app & easel.canvas.surface.pixels %~ Surface.writeCPUPixel (floor <$> toCanvasCoords app p) colour)
 
 
 -- |
-drawWithBrush :: App os -> V2 Float -> AppT os (Either String ()) 
+drawWithBrush :: App os -> V2 Float -> AppT os (App os) -- (Either String ())
 drawWithBrush app pos = drawPixelOnCanvas app pos (app^.easel.brush.colour)
 
 
 -- |
-erasePixel :: App os -> V2 Float -> AppT os (Either String ())
+erasePixel :: App os -> V2 Float -> AppT os (App os) -- (Either String ())
 erasePixel app pos = drawPixelOnCanvas app pos (app^.easel.canvas.colour)
+
+
+-- |
+-- TODO | - Rename
+--        -
+sampleColour :: App os -> V2 Float -> AppT os (App os)
+sampleColour app pos = do
+  -- liftIO $ do
+  --   cursorDown 3
+  --   print coords
+  --   print $ texture2DSizes (app^.easel.canvas.texture)
+  --   cursorUp 5
+  -- liftIO $ putStrLn "\n\n\n\n\n"
+  -- mcolour <- Render.pixelAt (coords) (app^.easel.canvas.texture)
+  -- liftIO $ print mcolour
+  -- Render.readPixels (V2 5 5) (V2 8 8) (app^.easel.canvas.texture)
+  -- liftIO $ print mcolour
+  -- return $ maybe (app) (\c -> app & easel.brush.colour .~ toHexColour c) mcolour
+  return $ maybe app (\new -> app & easel.brush.colour .~ new) (Surface.readCPUPixel coords (app^.easel.canvas.surface.pixels))
+  -- return app
+  where
+    coords = floor <$> toCanvasCoords app pos
 
 -- Event plumbing ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -166,7 +192,7 @@ erasePixel app pos = drawPixelOnCanvas app pos (app^.easel.canvas.colour)
 --        - KeyDown
 --        - KeyUp
 --        - FileChange
-setupEvents :: Window os RGBFloat Depth -> AppT os (TChan AppEvent)
+setupEvents :: Window os RGBAFloat Depth -> AppT os (TChan AppEvent)
 setupEvents win = do
   ch <- liftIO newTChanIO
 
@@ -198,7 +224,10 @@ processEvents :: App os -> AppT os (App os)
 processEvents app = do
   events <- liftIO $ whileJust (atomically . tryReadTChan $ app^.input.inputChannel) return
   sz     <- getFrameBufferSize (app^.window)
-  St.execStateT (mapM set events) (app & input.size .~ sz)
+  flip St.execStateT app $ do
+    input.size .= sz
+    viewport   .= ViewPort (V2 0 0) sz
+    mapM set events
   where
     -- TODO: Clean up on aisle 7
     set :: AppEvent -> St.StateT (App os) (ContextT GLFW.Handle os IO) ()
@@ -227,17 +256,19 @@ onkeydown app k = case k of
 
 -- |
 onmotion :: App os -> V2 Float -> AppT os (App os)
-onmotion app pos = do
-  when (app^.input.mouse.buttons.contains MouseButton'1) (void $ drawWithBrush app pos)
-  when (app^.input.mouse.buttons.contains MouseButton'2) (void $ erasePixel app pos)
-  return app
+onmotion app pos
+  | app^.hasMousebutton MouseButton'1 = drawWithBrush app pos
+  | app^.hasMousebutton MouseButton'2 = erasePixel app pos
+  | app^.hasMousebutton MouseButton'3 = sampleColour app pos
+  | otherwise                                       = return app
 
 
 -- |
 onmousedown :: App os -> MouseButton -> AppT os (App os)
 onmousedown app b = case b of
-  MouseButton'1 -> drawWithBrush app (app^.input.mouse.cursor) >> return app
-  MouseButton'2 -> erasePixel    app (app^.input.mouse.cursor) >> return app
+  MouseButton'1 -> drawWithBrush app (app^.input.mouse.cursor)
+  MouseButton'2 -> erasePixel    app (app^.input.mouse.cursor)
+  MouseButton'3 -> sampleColour  app (app^.input.mouse.cursor)
   _             -> return app
 
 
@@ -254,12 +285,12 @@ onscroll app (V2 dx dy) = flip St.execStateT app $ do
 onevent :: App os -> AppEvent -> AppT os (App os)
 onevent app e = case e of
   MouseMotion pos' -> let pos = realToFrac <$> pos' in onmotion (app & input.mouse.cursor .~ pos) pos
-  KeyDown k        -> onkeydown (app & input.keyboard.contains k .~ True) k
-  KeyUp k          -> return (app & input.keyboard.contains k .~ False)
-  MouseDown b      -> onmousedown (app & input.mouse.buttons.contains b .~ True) b
-  MouseUp b        -> return (app & input.mouse.buttons.contains b .~ False)
-  MouseScroll sc   -> onscroll (app & input.scroll %~ (+ sc)) sc
-  WindowClosing    -> onclosing app
+  KeyDown k        -> onkeydown   (app & hasKey k .~ True) k
+  KeyUp k          -> return      (app & hasKey k .~ False)
+  MouseDown b      -> onmousedown (app & hasMousebutton b .~ True) b
+  MouseUp b        -> return      (app & hasMousebutton b .~ False)
+  MouseScroll δ    -> onscroll    (app & input.scroll %~ (+ δ)) δ
+  WindowClosing    -> onclosing   (app)
   _ -> return app
 
 -- Linear algebra (coordinate systems) ---------------------------------------------------------------------------------------------------------------
@@ -295,7 +326,7 @@ screenToNormalised :: App os -> M44 Float
 screenToNormalised app = translated !*! scaled (V4 (sx) (-sy) 1 1)
   where
     (V2 sx sy) = (2*) . recip . fromIntegral <$> app^.input.size
-    translated = identity & translation .~ V3 0 (fromIntegral $ app^.easel.canvas.size.y) 0
+    translated = identity & translation .~ V3 0 (fromIntegral $ app^.easel.canvas.surface.size.y) 0
 
 
 -- toTextureCoords :: App os -> V2 Double -> V2 Int
@@ -304,6 +335,24 @@ screenToNormalised app = translated !*! scaled (V4 (sx) (-sy) 1 1)
 -- |
 -- origin :: App os -> V2 Int
 -- origin app = (`div` 2) <$> (app^.easel.canvas.size - app^.easel.canvas.size)
+
+-- Colour theory -------------------------------------------------------------------------------------------------------------------------------------
+
+-- TODO | - Factor out, refactor
+--        - Type safety (use types to distinguish different colour systems)
+
+-- |
+-- TODO | - Rename
+--        - Polymorphic
+toFloatColour :: V3 Word8 -> V3 Float
+toFloatColour = fmap ((/0xFF) . fromIntegral)
+
+
+-- |
+-- TODO | - Rename
+--        - Polymorphic
+toHexColour :: V3 Float -> V3 Word8
+toHexColour = fmap (floor . (*0xFF))
 
 -- Debugging and logging ----------------------------------------------------------------------------------------------------------------------------
 
@@ -319,8 +368,10 @@ debugScreen app = liftIO $ do
       cm = toCanvasCoords app sm
   alignedCoords "Screen" sm
   alignedCoords "Canvas" cm
-  printf "% 6s|%-6s\n" (show $ app^.input.mouse.buttons.contains MouseButton'1) (show $ app^.input.mouse.buttons.contains MouseButton'2)
+  printf "%s|%s|%s\n" (btn MouseButton'1) (btn MouseButton'3) (btn MouseButton'2)
   cursorUp 3
+  where
+    btn b = if app^.hasMousebutton b then "x" else " "
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 
@@ -328,7 +379,9 @@ debugScreen app = liftIO $ do
 -- TODO | - Rename
 run :: IO (Either String ())
 run = runEitherT $ do
+  lift $ putStrLn "Running"
   config <- EitherT . loadConfig $ root </> "assets/settings/config.json"
+  lift $ putStrLn "Done loading config"
   EitherT $ Right <$> runApplication config
 
 
@@ -337,43 +390,58 @@ run = runEitherT $ do
 --        - Separate initialise and execute functions (?)
 --        - Communicate with the 'outside', return some message or accept a queue for messages (?)
 runApplication :: AppConfig -> IO ()
-runApplication config = runContextT GLFW.defaultHandleConfig $ do
+runApplication config = do
+  putStrLn "Running application"  
+  runContextT GLFW.defaultHandleConfig $ do
+    liftIO $ putStrLn "Creating window"
+    win <- newWindow (WindowFormatColorDepth RGBA8 Depth32) $ WindowConfig {
+                                                                  configWidth   = config^.windowSize.x
+                                                                , configHeight  = config^.windowSize.y
+                                                                , configTitle   = "Pixels"
+                                                                , configMonitor = Nothing
+                                                                , configHints   = []
+                                                                , configSwapInterval = Nothing }
+    liftIO $ putStrLn "Creating canvas"
+    cvs <- Render.newCanvas (config^.canvasSize) (config^.canvasColour)
+    liftIO $ putStrLn "Creating brush"
+    br  <- Render.newBrush  (V2 0 0)             (config^.brushColour)
+    liftIO $ putStrLn "Creating uniforms"
+    us  <- Render.newUniforms config
 
-  win <- newWindow (WindowFormatColorDepth RGB8 Depth32) $ WindowConfig {
-                                                             configWidth   = config^.windowSize.x
-                                                           , configHeight  = config^.windowSize.y
-                                                           , configTitle   = "Pixels"
-                                                           , configMonitor = Nothing
-                                                           , configHints   = []
-                                                           , configSwapInterval = Nothing }
+    -- TODO: How do you use the same shader for different topologies?
+    liftIO $ putStrLn "Compiling shader"
+    shade <- compileShader $ do
+      canvasFragments <- Render.texturedShader
+      drawWindowColor (\_ -> (win, ContextColorOption NoBlending (pure True) :: ContextColorOption RGBAFloat)) canvasFragments
+      pointFragments  <- Render.colorShader
+      drawWindowColor (\_ -> (win, ContextColorOption NoBlending (pure True) :: ContextColorOption RGBAFloat)) pointFragments
+      -- ContextColorOption NoBlending (pure True :: ColorMask RGBFloat)
+    
+    --forall ctx a b c h w os f m. (ContextHandler ctx, MonadAsyncException m, MonadIO m, BufferFormat b, ColorSampleable c, BufferColor (Color c (ColorElement c)) h ~ b, h ~ HostFormat b) =>
+    -- Texture2D os (Format c) -> Level -> StartPos2 -> Size2 -> (a -> h -> ContextT ctx os m a) -> a -> ContextT ctx os m a
+    -- instance HasTexture (Canvas os0) (Texture2D os0 (Format RGBFloat)
+    --          HasTexture (Canvas os) (Texture2D os1 (Format RGBFloat)))
 
-  cvs <- Render.newCanvas (config^.canvasSize) (config^.canvasColour)
-  br  <- Render.newBrush  (V2 0 0)             (config^.brushColour)
-  us  <- Render.newUniforms config
+    -- mcolour <- readTexture2D (cvs^.texture) 0 (V2 4 8) (V2 4 4) (\ps c -> return (c:ps :: [V3 Float])) []
+    -- liftIO $ print mcolour
 
-  -- TODO: How do you use the same shader for different topologies?
-  shade <- compileShader $ do
-    canvasFragments <- Render.texturedShader
-    drawWindowColor (\_ -> (win, ContextColorOption NoBlending (pure True) :: ContextColorOption RGBFloat)) canvasFragments
-    pointFragments  <- Render.colorShader
-    drawWindowColor (\_ -> (win, ContextColorOption NoBlending (pure True) :: ContextColorOption RGBFloat)) pointFragments
-    -- ContextColorOption NoBlending (pure True :: ColorMask RGBFloat)
+    -- Events
+    liftIO $ putStrLn "Setting up channel"
+    channel <- setupEvents win
 
-  -- Events
-  channel <- setupEvents win
-
-  -- Off we go
-  mainloop $ App {
-    fRasterOptions = (FrontAndBack, ViewPort (V2 0 0) (config^.windowSize), DepthRange 0 1),
-    fShader        = shade,
-    fUniforms      = us,
-    fEasel         = Easel {
-                       fCanvas  = cvs,
-                       fBrush   = br,
-                       fPalette = let (Just xs) = newCircleList (config^.easelPalette) in xs }, -- TODO: Don't assume
-    fWindow        = win,
-    fInput         = initialInput channel (config^.windowSize) -- (InputChannel channel)
-  }
+    -- Off we go
+    liftIO $ putStrLn "Entering mainloop"
+    mainloop $ App {
+      fRasterOptions = (FrontAndBack, ViewPort (V2 0 0) (config^.windowSize), DepthRange 0 1),
+      fShader        = shade,
+      fUniforms      = us,
+      fEasel         = Easel {
+                         fCanvas  = cvs,
+                         fBrush   = br,
+                         fPalette = let (Just xs) = newCircleList (config^.easelPalette) in xs }, -- TODO: Don't assume
+      fWindow        = win,
+      fInput         = initialInput channel (config^.windowSize) -- (InputChannel channel)
+    }
 
 
 -- |
@@ -388,22 +456,17 @@ tick app' = do
   writeBuffer (app^.uniforms.scalars.buffer)  0 (app^.uniforms.scalars.values)
 
   -- Write attributes
-  writeBuffer (app^.easel.brush.positionBuffer) 0 [let (V2 x y) = app^.input.mouse.cursor
-                                                       pos      = screenToNormalised app !* (V4 x y 0 1)
-                                                       pixel    = app^.easel.brush.colour --fromIntegral <$> head (app^.easel.palette)
-                                                   in (pos, V3 0 0 0)]
+  -- liftIO $ putStrLn "Writing position buffer"
+  -- writeBuffer (app^.easel.brush.positionBuffer) 0 [let (V2 x y) = app^.input.mouse.cursor
+  --                                                      pos      = screenToNormalised app !* (V4 x y 0 1)
+  --                                                      pixel    = app^.easel.brush.colour --fromIntegral <$> head (app^.easel.palette)
+  --                                                  in (pos, V3 0 0 0)]
 
-  -- Paint the canvas
-  -- TODO: Apply transform
+  --
+  Surface.writeCPUTextureToGPU (app^.easel.canvas.surface.pixels) (app^.easel.canvas.surface.texture)
+
+  --
   debugScreen app
-  -- when (app^.input.mouse.buttons.contains MouseButton'1) $ do
-  --   liftIO $ putStrLn "Draw"
-  --   void $ drawPixelOnCanvas app (app^.input.mouse.cursor) (app^.easel.brush.colour)
-
-  -- when (app^.input.mouse.buttons.contains MouseButton'2) $ do
-  --   liftIO $ putStrLn "Erase"
-  --   (void $ drawPixelOnCanvas app (app^.input.mouse.cursor) (app^.easel.canvas.colour))
-  
   return app
 
 

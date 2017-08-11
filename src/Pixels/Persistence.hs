@@ -27,15 +27,16 @@ module Pixels.Persistence where
 
 -- We'll need these ----------------------------------------------------------------------------------------------------------------------------------
 
-import Linear (V2(..), V3(..), V4(..))
-
 import Data.Aeson as JSON (FromJSON(..), (.:), withObject, eitherDecode)
+import Data.Aeson.Types   (Parser, Value)
+
+import Control.Applicative ((<|>))
 
 import Data.ByteString.Lazy as B
 
+import Linear (V2(..), V3(..), V4(..))
+
 import Pixels.Types
-import Pixels.Lenses
-import Pixels.Trinkets
 
 -- Definitions ---------------------------------------------------------------------------------------------------------------------------------------
 
@@ -63,6 +64,15 @@ instance FromJSON AppConfig where
                                                        <*> (o .: "window" >>= (.: "size"))
                                                        <*> (o .: "brush")
                                                        <*> (o .: "canvas" >>= (.: "palette"))
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+-- | Parser a colour, with a default value for the alpha channel
+-- rgba :: FromJSON a => a -> Value -> Parser (V4 a)
+-- rgba d = withObject "V4" $ \o -> V4 <$> o .: "x"
+--                                       <*> o .: "y"
+--                                       <*> o .: "z"
+--                                       <*> (o .: "w" <|> pure d)
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------
 

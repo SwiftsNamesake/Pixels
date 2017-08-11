@@ -43,7 +43,7 @@ TODO
     - Command palette
     
   - [ ] Interesting libraries
-        - [Diagrams](http://projects.haskell.org/diagrams/)
+    - [Diagrams](http://projects.haskell.org/diagrams/)
 
   - [ ] How to deal with external DLLs
   - [ ] Is Awesomium 32-bit only?
@@ -54,6 +54,8 @@ TODO
   - [ ] Extensions
     - Website with user provided extensions (and a webservice that powers it)
     - Debugging tools
+    - API/Protocol
+    - Security (via types, etc.)
 
   - [ ] OpenGL profiles, compatibility
   - [ ] Versioned history
@@ -67,6 +69,7 @@ TODO
   - Saving
     - Autosave
     - Conversions
+    - Remember application state (workspaces, etc.)
     - Syncing (via Dropbox, iCloud, Google Drive, or my own site)
 
   - Image processing

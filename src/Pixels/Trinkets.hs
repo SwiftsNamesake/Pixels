@@ -32,12 +32,12 @@ module Pixels.Trinkets (
   -- * Stuff
   pass, execute, sequencePairs,
   hasExtension,
-  flatten, asList,
+  -- flatten, asList,
   indentedStrLn,
 
   -- * Linear algebra
   to2D, to3D, to4D, dropY, dropZ, dropZW,
-  axisRotation, texcoord,
+  axisRotation, texcoord
 ) where
 
 --- We'll need these ---------------------------------------------------------------------------------------------------------------------------------
@@ -56,8 +56,8 @@ import Control.Monad (when, void)
 import Control.Lens
 import Control.Applicative (liftA2)
 
-import System.FilePath  (takeExtension) --
-import System.IO (stdout, hFlush) --
+import System.FilePath     (takeExtension) --
+import System.IO           (stdout, hFlush) --
 import System.Console.ANSI (setSGR, SGR(..), Color(..), ConsoleLayer(..), ColorIntensity(Vivid))
 
 import Pixels.Types
@@ -77,7 +77,8 @@ flushed action = do
   return v
 
 
--- TODO: Unicode
+-- TODO | - Unicode
+--        -
 
 putStrLn :: String -> IO ()
 putStrLn = flushed . P.putStrLn
@@ -106,7 +107,7 @@ hasExtension ext fn = takeExtension fn == ext -- This should really be defined i
 
 -- |
 indent :: Int -> String -> String
-indent i s = (++ s) . flip replicate ' ' . (*2) $ i
+indent i s = replicate (i*2) ' ' ++ s
 
 
 -- |
@@ -125,10 +126,10 @@ putWithSGR = void . mapM (either setSGR putStr)
 
 
 -- |
--- TODO: Colouring breaks when using the Git-bash console
--- TODO: Rendering log messages
--- TODO: Indent multiple lines (?)
--- TODO: Break up filtering (when) and formatting (putWithSGR)
+-- TODO | - Colouring breaks when using the Git-bash console
+--        - Rendering log messages
+--        - Indent multiple lines (?)
+--        - Break up filtering (when) and formatting (putWithSGR)
 -- logStr :: Debug -> LogLevel -> Int -> String -> IO ()
 -- logStr db logLvl indentLvl s = when (shouldLog db logLvl) $ putWithSGR [Right $ indent indentLvl "[",
 --                                                                         Left  $ [SetColor Foreground Vivid fg],
@@ -155,7 +156,7 @@ execute = void . runEitherT
 
 
 -- | Like sequence, but for tuples where the first item is pure
--- TODO: Rename (?)
+-- TODO | - Rename (?)
 sequencePairs :: Monad m => [(a, m b)] -> m [(a,b)]
 sequencePairs ps = let invert (a, b) = b >>= return . (a,) in sequence . map invert $ ps
 
@@ -169,6 +170,7 @@ snapToNearest resolution point origin = liftA2 snap' resolution (point - origin)
 
 
 -- TODO | - Clear up the naming confusion (some drop, some add)
+--        -
 
 
 -- | Drops the Z coordinate
@@ -211,21 +213,15 @@ axisRotation :: (Floating f, Epsilon f) => V3 f -> f -> M33 f
 axisRotation axis θ = fromQuaternion $ axisAngle axis θ
 
 
--- | Finds the right texture coordinate for a vertex
+-- | Finds the right texture coordinate for a vertex (in a rectangle)
+-- TODO | - Move
+--        - Rename
 texcoord :: Fractional f => V3 f -> V2 f
 texcoord = fmap ((*0.5) . (+1) . signum) . dropZ
 
 -- Math ----------------------------------------------------------------------------------------------------------------------------------------------
 
 -- Vectors -------------------------------------------------------------------------------------------------------------------------------------------
-
-flatten :: Foldable v => [v f] -> [f]
-flatten = concatMap asList
-
-
--- foldl :: (b -> a -> b) -> b -> t a -> b
-asList :: Foldable v => v f -> [f]
-asList = F.foldr (:) []
 
 -- Map operations ------------------------------------------------------------------------------------------------------------------------------------
 

@@ -47,8 +47,11 @@ library
 
   hs-source-dirs:      src
   exposed-modules:       Pixels.Types
+                       , Pixels.Algebra
                        , Pixels.Render
-                       , Pixels.Render.Utils
+                       , Pixels.Colour
+                       , Pixels.Render.Surface
+                       , Pixels.Render.Core
                        , Pixels.Render.Typography
                        , Pixels.Persistence
                        , Pixels.Interaction
@@ -94,6 +97,7 @@ library
                        , ansi-terminal
                        -- monad-transformers
                        , cubist-sculptor
+                       , chainable-operators
                        , Cartesian >= 0.5
                        , Leibniz
 
